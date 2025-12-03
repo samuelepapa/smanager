@@ -1,6 +1,6 @@
 # Slurm Manager (`smanager`)
 
-[![CI](https://github.com/yourusername/slurm_manager/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/slurm_manager/actions/workflows/ci.yml)
+[![CI](https://github.com/samuelepapa/smanager/actions/workflows/ci.yml/badge.svg)](https://github.com/samuelepapa/smanager/actions/workflows/ci.yml)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -381,8 +381,8 @@ def random_search(n_trials=50):
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/slurm_manager.git
-cd slurm_manager
+git clone https://github.com/samuelepapa/smanager.git
+cd smanager
 
 # Install with dev dependencies
 make install-dev
