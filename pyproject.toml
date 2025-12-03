@@ -83,6 +83,7 @@ disable = [
     "C0114",  # missing-module-docstring (we use file-level docstrings selectively)
     "C0115",  # missing-class-docstring (handled by Google style)
     "C0116",  # missing-function-docstring (handled by Google style)
+    "R0801",  # duplicate-code (slurm options are intentionally similar)
     "R0903",  # too-few-public-methods
     "R0913",  # too-many-arguments (common in CLI tools)
     "R0914",  # too-many-locals

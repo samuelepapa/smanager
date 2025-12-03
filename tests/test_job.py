@@ -3,15 +3,14 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from smanager.job import SlurmJob
 
 
 def test_job_uuid_generation():
     """Test that jobs get unique UUIDs."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = Path(tmpdir) / "script.py"
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "script.py"
         script_path.write_text("print('hello')")
 
         job1 = SlurmJob(script_path=str(script_path))
@@ -24,7 +23,8 @@ def test_job_uuid_generation():
 def test_job_script_generation():
     """Test sbatch script generation."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = Path(tmpdir) / "train.py"
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "train.py"
         script_path.write_text("print('training')")
 
         job = SlurmJob(
@@ -43,13 +43,15 @@ def test_job_script_generation():
         assert "--mem=32G" in script
         assert "--time=24:00:00" in script
         assert "--partition=gpu" in script
-        assert str(script_path) in script
+        # Use resolved path for comparison
+        assert str(script_path.resolve()) in script
 
 
 def test_job_with_script_args():
     """Test job with script arguments."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = Path(tmpdir) / "train.py"
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "train.py"
         script_path.write_text("import sys; print(sys.argv)")
 
         job = SlurmJob(
@@ -65,7 +67,7 @@ def test_job_with_script_args():
 def test_job_save_script():
     """Test saving job script to disk."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+        tmpdir = Path(tmpdir).resolve()
         script_path = tmpdir / "train.py"
         script_path.write_text("print('train')")
 
@@ -88,7 +90,7 @@ def test_job_save_script():
 def test_job_experiment_name_default():
     """Test that experiment name defaults to parent.script format."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+        tmpdir = Path(tmpdir).resolve()
         # Create nested structure: experiments/train.py
         exp_dir = tmpdir / "experiments"
         exp_dir.mkdir()
@@ -103,7 +105,8 @@ def test_job_experiment_name_default():
 def test_job_experiment_name_custom():
     """Test custom experiment name."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = Path(tmpdir) / "train.py"
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "train.py"
         script_path.write_text("print('train')")
 
         job = SlurmJob(
@@ -112,4 +115,3 @@ def test_job_experiment_name_custom():
         )
 
         assert job.experiment_name == "my_experiment"
-

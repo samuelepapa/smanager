@@ -80,4 +80,3 @@ dmypy.json
 # Project specific
 .smanager/scripts/
 *.sbatch
-

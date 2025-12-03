@@ -1,8 +1,8 @@
 """Sbatch script templates and generation."""
 
-from typing import Optional, List, Dict, Any
-from jinja2 import Template
+from typing import List, Optional
 
+from jinja2 import Template
 
 # Default sbatch template
 DEFAULT_TEMPLATE = """#!/bin/bash
@@ -72,18 +72,18 @@ cd {{ working_dir }}
 
 class SbatchTemplate:
     """Generates sbatch scripts from templates."""
-    
+
     def __init__(self, template_str: Optional[str] = None):
         """
         Initialize with a template string.
-        
+
         Args:
             template_str: Custom Jinja2 template string. Uses default if None.
         """
         self.template_str = template_str or DEFAULT_TEMPLATE
         self.template = Template(self.template_str)
-    
-    def render(
+
+    def render(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         script_path: str,
         job_name: str,
@@ -91,7 +91,7 @@ class SbatchTemplate:
         script_args: str = "",
         preamble: str = "",
         python_executable: str = "python",
-        # Slurm options (all optional)
+        *,
         partition: Optional[str] = None,
         gpus: Optional[int] = None,
         memory: Optional[str] = None,
@@ -109,50 +109,49 @@ class SbatchTemplate:
         exclude: Optional[str] = None,
         nodelist: Optional[str] = None,
         extra_sbatch_args: Optional[List[str]] = None,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         Render the sbatch script with given parameters.
-        
+
         Only parameters that are explicitly provided (not None) will be
         included in the generated script.
-        
+
         Returns:
             The rendered sbatch script as a string.
         """
         context = {
-            'script_path': script_path,
-            'job_name': job_name,
-            'working_dir': working_dir,
-            'script_args': script_args,
-            'preamble': preamble.strip() if preamble else "",
-            'python_executable': python_executable,
-            'partition': partition,
-            'gpus': gpus,
-            'memory': memory,
-            'time': time,
-            'nodes': nodes,
-            'ntasks': ntasks,
-            'cpus_per_task': cpus_per_task,
-            'output': output,
-            'error': error,
-            'mail_type': mail_type,
-            'mail_user': mail_user,
-            'account': account,
-            'qos': qos,
-            'constraint': constraint,
-            'exclude': exclude,
-            'nodelist': nodelist,
-            'extra_sbatch_args': extra_sbatch_args or [],
+            "script_path": script_path,
+            "job_name": job_name,
+            "working_dir": working_dir,
+            "script_args": script_args,
+            "preamble": preamble.strip() if preamble else "",
+            "python_executable": python_executable,
+            "partition": partition,
+            "gpus": gpus,
+            "memory": memory,
+            "time": time,
+            "nodes": nodes,
+            "ntasks": ntasks,
+            "cpus_per_task": cpus_per_task,
+            "output": output,
+            "error": error,
+            "mail_type": mail_type,
+            "mail_user": mail_user,
+            "account": account,
+            "qos": qos,
+            "constraint": constraint,
+            "exclude": exclude,
+            "nodelist": nodelist,
+            "extra_sbatch_args": extra_sbatch_args or [],
         }
         context.update(kwargs)
-        
+
         return self.template.render(**context)
 
 
 def load_template_from_file(template_path: str) -> SbatchTemplate:
     """Load a custom template from a file."""
-    with open(template_path, 'r') as f:
+    with open(template_path, "r", encoding="utf-8") as f:
         template_str = f.read()
     return SbatchTemplate(template_str)
-

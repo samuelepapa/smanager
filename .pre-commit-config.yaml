@@ -28,4 +28,3 @@ repos:
         language: system
         types: [python]
         args: ["--rcfile=pyproject.toml"]
-

@@ -3,15 +3,14 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from smanager.config import SManagerConfig
 
 
 def test_config_without_smanager_dir():
     """Test config when no .smanager directory exists."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = Path(tmpdir) / "script.py"
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "script.py"
         script_path.touch()
 
         config = SManagerConfig(script_path)
@@ -24,7 +23,7 @@ def test_config_without_smanager_dir():
 def test_config_with_smanager_dir():
     """Test config discovery when .smanager exists."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+        tmpdir = Path(tmpdir).resolve()
 
         # Create .smanager directory
         smanager_dir = tmpdir / ".smanager"
@@ -53,7 +52,7 @@ def test_config_with_smanager_dir():
 def test_config_discovery_in_parent():
     """Test that config is discovered in parent directories."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+        tmpdir = Path(tmpdir).resolve()
 
         # Create .smanager in root
         smanager_dir = tmpdir / ".smanager"
@@ -74,7 +73,7 @@ def test_config_discovery_in_parent():
 def test_get_script_dir():
     """Test script directory creation."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+        tmpdir = Path(tmpdir).resolve()
 
         # Create .smanager
         smanager_dir = tmpdir / ".smanager"
@@ -88,4 +87,3 @@ def test_get_script_dir():
 
         assert script_dir.exists()
         assert script_dir == smanager_dir / "scripts"
-
