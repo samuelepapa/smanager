@@ -1,0 +1,140 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smanager"
+version = "0.1.0"
+description = "A CLI tool for managing Slurm jobs and parameter sweeps"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Clustering",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "click>=8.0.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.0.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "pylint>=3.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[project.scripts]
+smanager = "smanager.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["smanager*"]
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+)/
+'''
+
+# isort configuration (compatible with Black)
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["smanager"]
+skip_gitignore = true
+
+# Pylint configuration (Google style)
+[tool.pylint.main]
+load-plugins = []
+jobs = 0  # Auto-detect number of processors
+
+[tool.pylint.messages_control]
+# Disable some checks that conflict with Black or are too strict
+disable = [
+    "C0114",  # missing-module-docstring (we use file-level docstrings selectively)
+    "C0115",  # missing-class-docstring (handled by Google style)
+    "C0116",  # missing-function-docstring (handled by Google style)
+    "R0903",  # too-few-public-methods
+    "R0913",  # too-many-arguments (common in CLI tools)
+    "R0914",  # too-many-locals
+    "W0511",  # fixme (allow TODO comments)
+    "W1203",  # logging-fstring-interpolation
+]
+
+[tool.pylint.format]
+# Match Black's line length
+max-line-length = 88
+
+[tool.pylint.basic]
+# Google style naming conventions
+good-names = ["i", "j", "k", "f", "e", "ex", "fd", "fp", "_"]
+argument-naming-style = "snake_case"
+attr-naming-style = "snake_case"
+function-naming-style = "snake_case"
+method-naming-style = "snake_case"
+module-naming-style = "snake_case"
+variable-naming-style = "snake_case"
+class-naming-style = "PascalCase"
+const-naming-style = "UPPER_CASE"
+
+[tool.pylint.design]
+max-args = 10
+max-attributes = 15
+max-locals = 20
+
+[tool.pylint.similarities]
+min-similarity-lines = 6
+ignore-comments = true
+ignore-docstrings = true
+ignore-imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["smanager"]
+branch = true
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
