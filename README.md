@@ -10,6 +10,7 @@ A Python CLI tool for managing Slurm jobs and parameter sweeps with project-leve
 
 - **Simple Job Submission**: Run Python scripts as Slurm jobs with intuitive CLI options
 - **Generator-based Sweeps**: Define sweeps as Python generator functions for maximum flexibility
+- **Local Sweeps**: Run sweeps locally on an allocated node using tmux sessions with GPU assignment
 - **Project Configuration**: Define project-level defaults and environment setup via `.smanager` directory
 - **Script Organization**: Automatically organizes generated sbatch scripts by experiment name
 - **Preamble Support**: Add common setup commands (conda activation, environment variables, etc.) that apply to all jobs in a project
@@ -140,6 +141,32 @@ smanager kill a1b2c3d4
 smanager kill --dry-run
 ```
 
+### 6. Run Local Sweeps (on an Allocated Node)
+
+When you have an allocated node with multiple GPUs (e.g., via `salloc`), you can run a sweep locally using tmux sessions instead of submitting multiple Slurm jobs:
+
+```bash
+# Run sweep with 4 workers, each assigned one GPU
+smanager local train.py sweeps.py grid_search --workers 4 --gpus 0,1,2,3
+
+# Dry run to preview generated scripts
+smanager local train.py sweeps.py my_sweep -w 4 -g 0,1,2,3 --dry-run --show
+
+# With base arguments
+smanager local train.py sweeps.py my_sweep -w 4 -g 0,1,2,3 -- --epochs 100
+
+# List active sweep sessions
+smanager local-list
+
+# Kill all sweep sessions
+smanager local-kill
+```
+
+Each worker runs in its own tmux session with:
+- Assigned GPU(s) via `CUDA_VISIBLE_DEVICES`
+- Environment setup from your preamble
+- A subset of the sweep jobs running sequentially
+
 ## CLI Reference
 
 ### `smanager run`
@@ -246,6 +273,63 @@ List generated sbatch scripts.
 
 ```
 smanager list [EXPERIMENT]
+```
+
+### `smanager local`
+
+Run a parameter sweep locally using tmux sessions. Useful when you have an allocated node with multiple GPUs.
+
+```
+smanager local [OPTIONS] SCRIPT SWEEP_FILE SWEEP_FUNCTION [BASE_ARGS]...
+```
+
+**Arguments:**
+- `SCRIPT`: Path to the Python script to run
+- `SWEEP_FILE`: Python file containing the sweep generator function
+- `SWEEP_FUNCTION`: Name of the generator function that yields parameter dicts
+- `BASE_ARGS`: Base arguments always passed to the script (after --)
+
+**Options:**
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--workers` | `-w` | Number of parallel tmux sessions/workers |
+| `--gpus` | `-g` | Comma-separated GPU IDs (e.g., '0,1,2,3') |
+| `--name` | `-n` | Experiment name |
+| `--session-prefix` | `-s` | Prefix for tmux session names (default: sweep) |
+| `--python` | | Python executable (default: python) |
+| `--working-dir` | | Working directory |
+| `--dry-run` | `-d` | Generate scripts without launching tmux |
+| `--show` | | Display generated worker scripts |
+| `--arg-format` | | Argument format (default: `--{key}={value}`) |
+
+**Examples:**
+```bash
+# 4 workers with one GPU each
+smanager local train.py sweeps.py grid --workers 4 --gpus 0,1,2,3
+
+# Custom session prefix
+smanager local train.py sweeps.py grid -w 2 -g 0,1 --session-prefix myexp
+```
+
+### `smanager local-kill`
+
+Kill tmux sessions created by local sweep.
+
+```
+smanager local-kill [PREFIX] [OPTIONS]
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--dry-run` / `-d` | Show what would be killed |
+
+### `smanager local-list`
+
+List active tmux sessions from local sweeps.
+
+```
+smanager local-list [PREFIX]
 ```
 
 ## Project Structure

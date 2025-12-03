@@ -1,19 +1,24 @@
 """Command-line interface for Slurm Manager."""
 
+# pylint: disable=too-many-lines
+
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import click
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
 from .config import SManagerConfig
 from .job import SlurmJob
+from .local import LocalSweep
 from .sweep import Sweep
 
 console = Console()
@@ -25,7 +30,7 @@ def parse_extra_args(args: Tuple[str, ...]) -> List[str]:
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="smanager")
+@click.version_option(version="0.2.0", prog_name="smanager")
 def cli():
     """
     Slurm Manager - A CLI tool for managing Slurm jobs and parameter sweeps.
@@ -362,6 +367,296 @@ def _save_and_submit_sweep(sweep_obj: Sweep, dry_run: bool, delay: float) -> Non
             if job_id:
                 params_str = ", ".join(f"{k}={v}" for k, v in job.sweep_params.items())
                 console.print(f"  [green]{job_id}[/green]: {params_str}")
+
+
+@cli.command("local")
+@click.argument("script", type=click.Path(exists=True))
+@click.argument("sweep_file", type=click.Path(exists=True))
+@click.argument("sweep_function")
+@click.option("--name", "-n", help="Experiment name (defaults to script_sweep)")
+@click.option(
+    "--workers",
+    "-w",
+    type=int,
+    default=1,
+    help="Number of parallel tmux sessions/workers",
+)
+@click.option(
+    "--gpus",
+    "-g",
+    help="Comma-separated GPU IDs to use (e.g., '0,1,2,3')",
+)
+@click.option(
+    "--python", "python_executable", default="python", help="Python executable"
+)
+@click.option("--working-dir", type=click.Path(), help="Working directory")
+@click.option(
+    "--session-prefix",
+    "-s",
+    default="sweep",
+    help="Prefix for tmux session names (default: sweep)",
+)
+@click.option(
+    "--dry-run", "-d", is_flag=True, help="Generate scripts but do not launch tmux"
+)
+@click.option("--show", is_flag=True, help="Show generated worker scripts")
+@click.option(
+    "--arg-format",
+    default="--{key}={value}",
+    help="Format for sweep args (default: --{key}={value})",
+)
+@click.argument("base_args", nargs=-1, type=click.UNPROCESSED)
+def local_sweep(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    script: str,
+    sweep_file: str,
+    sweep_function: str,
+    name: Optional[str],
+    workers: int,
+    gpus: Optional[str],
+    python_executable: str,
+    working_dir: Optional[str],
+    session_prefix: str,
+    dry_run: bool,
+    show: bool,
+    arg_format: str,
+    base_args: Tuple[str, ...],
+):
+    """
+    Run a parameter sweep locally using tmux sessions.
+
+    This command is useful when you have an allocated node with multiple GPUs
+    and want to run a sweep without submitting multiple Slurm jobs. Each worker
+    runs in its own tmux session with assigned GPUs.
+
+    \b
+    SCRIPT: Path to the Python script to run.
+    SWEEP_FILE: Python file containing the sweep generator function.
+    SWEEP_FUNCTION: Name of the generator function that yields parameter dicts.
+    BASE_ARGS: Base arguments always passed to the script (after --).
+
+    \b
+    Examples:
+        # Run sweep with 4 workers, auto-assign GPUs
+        smanager local train.py sweeps.py my_sweep --workers 4 --gpus 0,1,2,3
+
+        # Run with specific GPU assignment
+        smanager local train.py sweeps.py grid --workers 2 --gpus 0,1
+
+        # Dry run to see generated scripts
+        smanager local train.py sweeps.py my_sweep -w 4 -g 0,1,2,3 --dry-run --show
+
+        # With base arguments
+        smanager local train.py sweeps.py my_sweep -w 4 -- --epochs 100
+    """
+    try:
+        local_obj = LocalSweep(
+            script_path=script,
+            sweep_file=sweep_file,
+            sweep_function=sweep_function,
+            base_args=parse_extra_args(base_args),
+            experiment_name=name,
+            arg_format=arg_format,
+            workers=workers,
+            gpus=gpus,
+            python_executable=python_executable,
+            working_dir=working_dir,
+            session_prefix=session_prefix,
+        )
+
+        local_obj.generate_param_sets()
+        _display_local_sweep_info(local_obj, script, sweep_file, sweep_function)
+
+        scripts = local_obj.save_scripts()
+
+        if show:
+            for script_path in scripts:
+                script_content = script_path.read_text(encoding="utf-8")
+                console.print(
+                    Panel(
+                        Syntax(script_content, "bash", theme="monokai"),
+                        title=f"[bold blue]{script_path.name}[/bold blue]",
+                        border_style="blue",
+                    )
+                )
+
+        console.print(f"\n[green]✓[/green] Generated {len(scripts)} worker scripts")
+        console.print(f"[dim]  Scripts saved in: {local_obj.sweep_dir}[/dim]")
+
+        if local_obj.config.config_dir:
+            console.print(
+                f"[dim]  Using config from: {local_obj.config.config_dir}[/dim]"
+            )
+
+        if dry_run:
+            console.print(
+                "\n[yellow]⚠[/yellow] Dry run mode - tmux sessions not launched"
+            )
+            console.print("[dim]  Use --show to see the generated worker scripts[/dim]")
+            return
+
+        console.print("\n[bold]Launching tmux sessions...[/bold]")
+        sessions = local_obj.launch()
+
+        console.print(f"[green]✓[/green] Launched {len(sessions)} tmux sessions")
+        console.print("\n[bold]Sessions:[/bold]")
+        for idx, session in enumerate(sessions):
+            gpu = local_obj.get_gpu_for_worker(idx)
+            gpu_info = f" (GPU {gpu})" if gpu else ""
+            console.print(f"  [cyan]{session}[/cyan]{gpu_info}")
+
+        console.print(
+            "\n[dim]Attach to a session with: tmux attach -t <session_name>[/dim]"
+        )
+        console.print(
+            f"[dim]Kill all sessions with: smanager local-kill {session_prefix}[/dim]"
+        )
+
+    except FileNotFoundError as exc:
+        console.print(f"[red]✗ File not found:[/red] {exc}")
+        sys.exit(1)
+    except AttributeError as exc:
+        console.print(f"[red]✗ Function not found:[/red] {exc}")
+        sys.exit(1)
+    except TypeError as exc:
+        console.print(f"[red]✗ Invalid sweep function:[/red] {exc}")
+        sys.exit(1)
+
+
+def _display_local_sweep_info(
+    local_obj: LocalSweep, script: str, sweep_file: str, sweep_function: str
+) -> None:
+    """Display local sweep information."""
+    gpu_info = local_obj.gpu_list
+    gpu_str = ", ".join(gpu_info) if gpu_info else "auto"
+
+    console.print(
+        Panel(
+            f"[bold]Script:[/bold] {script}\n"
+            f"[bold]Sweep File:[/bold] {sweep_file}\n"
+            f"[bold]Sweep Function:[/bold] {sweep_function}\n"
+            f"[bold]Sweep UUID:[/bold] {local_obj.sweep_uuid}\n"
+            f"[bold]Total Jobs:[/bold] {len(local_obj.param_sets)}\n"
+            f"[bold]Workers:[/bold] {local_obj.workers}\n"
+            f"[bold]GPUs:[/bold] {gpu_str}",
+            title="[bold blue]Local Parameter Sweep[/bold blue]",
+            border_style="blue",
+        )
+    )
+
+    if local_obj.param_sets:
+        table = Table(title="Sweep Parameters (preview)")
+        first_params = local_obj.param_sets[0]
+        for key in first_params.keys():
+            table.add_column(key, style="cyan")
+
+        preview_count = min(10, len(local_obj.param_sets))
+        for params in local_obj.param_sets[:preview_count]:
+            row = [str(v) for v in params.values()]
+            table.add_row(*row)
+
+        if len(local_obj.param_sets) > preview_count:
+            table.add_row(*["..." for _ in first_params])
+
+        console.print(table)
+
+    # Show job distribution
+    jobs_per_worker = len(local_obj.param_sets) // local_obj.workers
+    remainder = len(local_obj.param_sets) % local_obj.workers
+
+    dist_table = Table(title="Job Distribution")
+    dist_table.add_column("Worker", style="cyan")
+    dist_table.add_column("Jobs", style="green")
+    dist_table.add_column("GPU(s)", style="yellow")
+
+    for w in range(local_obj.workers):
+        job_count = jobs_per_worker + (1 if w < remainder else 0)
+        gpu = local_obj.get_gpu_for_worker(w) or "-"
+        dist_table.add_row(f"worker_{w}", str(job_count), gpu)
+
+    console.print(dist_table)
+
+
+@cli.command("local-kill")
+@click.argument("prefix", default="sweep")
+@click.option(
+    "--dry-run",
+    "-d",
+    is_flag=True,
+    help="Show what would be killed without actually killing",
+)
+def local_kill(prefix: str, dry_run: bool):
+    """
+    Kill tmux sessions created by local sweep.
+
+    \b
+    PREFIX: Session name prefix to kill (default: sweep).
+
+    \b
+    Examples:
+        smanager local-kill              # Kill all 'sweep_*' sessions
+        smanager local-kill mysweep      # Kill all 'mysweep_*' sessions
+        smanager local-kill --dry-run    # Show what would be killed
+    """
+    sessions = LocalSweep.list_sweep_sessions(prefix)
+
+    if not sessions:
+        console.print(
+            f"[yellow]⚠[/yellow] No tmux sessions found with prefix '{prefix}'"
+        )
+        return
+
+    table = Table(title="Sessions to Kill" if not dry_run else "Sessions (Dry Run)")
+    table.add_column("Session", style="cyan")
+    table.add_column("Status", style="yellow")
+
+    for session in sessions:
+        status = "Will kill" if not dry_run else "Would kill"
+        table.add_row(session, status)
+
+    console.print(table)
+
+    if dry_run:
+        console.print(
+            f"\n[yellow]⚠[/yellow] Dry run - would kill {len(sessions)} sessions"
+        )
+        return
+
+    killed = 0
+    for session in sessions:
+        result = subprocess.run(
+            ["tmux", "kill-session", "-t", session],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            killed += 1
+
+    console.print(f"\n[green]✓[/green] Killed {killed}/{len(sessions)} sessions")
+
+
+@cli.command("local-list")
+@click.argument("prefix", default="sweep")
+def local_list(prefix: str):
+    """
+    List active tmux sessions from local sweeps.
+
+    \b
+    PREFIX: Session name prefix to filter (default: sweep).
+    """
+    sessions = LocalSweep.list_sweep_sessions(prefix)
+
+    if not sessions:
+        console.print(f"[dim]No tmux sessions found with prefix '{prefix}'[/dim]")
+        return
+
+    table = Table(title=f"Active Sessions (prefix: {prefix})")
+    table.add_column("Session", style="cyan")
+
+    for session in sessions:
+        table.add_row(session)
+
+    console.print(table)
+    console.print("\n[dim]Attach with: tmux attach -t <session_name>[/dim]")
 
 
 @cli.command()
@@ -881,6 +1176,424 @@ def _display_sweep_history(sweeps: List[Dict]) -> None:
 
     console.print(table)
     console.print("\n[dim]Use 'smanager kill <UUID>' to cancel jobs from a sweep[/dim]")
+
+
+# Job status constants
+JOB_STATUS_PENDING = {"PD", "CF"}  # Pending, Configuring
+JOB_STATUS_RUNNING = {"R", "CG"}  # Running, Completing
+JOB_STATUS_COMPLETED = {"CD"}  # Completed
+JOB_STATUS_FAILED = {"F", "CA", "TO", "NF", "PR", "BF", "OOM"}  # Failed states
+
+
+def _get_job_status(
+    job_ids: List[str],
+) -> Dict[str, Dict]:  # pylint: disable=too-many-branches
+    """Get status of jobs using squeue and sacct."""
+    if not job_ids:
+        return {}
+
+    status_map = {}
+
+    # First try squeue for running/pending jobs
+    try:
+        result = subprocess.run(
+            ["squeue", "-j", ",".join(job_ids), "-h", "-o", "%A|%t|%M|%N|%j"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split("\n"):
+                if line:
+                    parts = line.split("|")
+                    if len(parts) >= 5:
+                        job_id, state, time_used, node, name = parts[:5]
+                        status_map[job_id] = {
+                            "state": state,
+                            "time": time_used,
+                            "node": node or "-",
+                            "name": name,
+                            "source": "squeue",
+                        }
+    except FileNotFoundError:
+        pass
+
+    # Then check sacct for completed/failed jobs not in squeue
+    missing_jobs = [j for j in job_ids if j not in status_map]
+    if missing_jobs:
+        _get_sacct_status(missing_jobs, status_map)
+
+    return status_map
+
+
+def _get_sacct_status(missing_jobs: List[str], status_map: Dict[str, Dict]) -> None:
+    """Get job status from sacct for completed/failed jobs."""
+    try:
+        result = subprocess.run(
+            [
+                "sacct",
+                "-j",
+                ",".join(missing_jobs),
+                "-n",
+                "-P",
+                "-o",
+                "JobID,State,Elapsed,NodeList,ExitCode",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return
+
+    if result.returncode != 0:
+        return
+
+    for line in result.stdout.strip().split("\n"):
+        if not line:
+            continue
+        parts = line.split("|")
+        if len(parts) < 5:
+            continue
+        job_id, state, elapsed, node, exit_code = parts[:5]
+        # Skip job steps (like 12345.batch)
+        if "." in job_id or job_id not in missing_jobs:
+            continue
+        status_map[job_id] = {
+            "state": state,
+            "time": elapsed,
+            "node": node or "-",
+            "exit_code": exit_code,
+            "source": "sacct",
+        }
+
+
+def _read_error_tail(error_file: str, lines: int = 20) -> Optional[str]:
+    """Read the last N lines of an error file."""
+    error_path = Path(error_file)
+    if not error_path.exists():
+        return None
+
+    try:
+        content = error_path.read_text(encoding="utf-8", errors="replace")
+        error_lines = content.strip().split("\n")
+        if error_lines and any(line.strip() for line in error_lines):
+            return "\n".join(error_lines[-lines:])
+    except OSError:
+        pass
+
+    return None
+
+
+def _format_state(state: str) -> str:
+    """Format job state with color."""
+    if state in JOB_STATUS_PENDING:
+        return f"[yellow]{state}[/yellow]"
+    if state in JOB_STATUS_RUNNING:
+        return f"[blue]{state}[/blue]"
+    if state in JOB_STATUS_COMPLETED:
+        return f"[green]{state}[/green]"
+    if state in JOB_STATUS_FAILED:
+        return f"[red]{state}[/red]"
+    return state
+
+
+def _build_monitor_table(
+    sweep_data: Dict, status_map: Dict[str, Dict], show_params: bool = True
+) -> Table:
+    """Build the monitoring table."""
+    table = Table(title="Job Status", show_header=True)
+    table.add_column("Job ID", style="cyan")
+    table.add_column("Status")
+    table.add_column("Time", style="dim")
+    table.add_column("Node", style="dim")
+    if show_params:
+        table.add_column("Parameters", style="yellow")
+
+    jobs_data = sweep_data.get("jobs", {})
+
+    for job_info in jobs_data.values():
+        slurm_job_id = job_info.get("slurm_job_id")
+        if not slurm_job_id:
+            continue
+
+        status = status_map.get(slurm_job_id, {})
+        state = status.get("state", "?")
+        time_used = status.get("time", "-")
+        node = status.get("node", "-")
+
+        if show_params:
+            params = job_info.get("params", {})
+            params_str = ", ".join(f"{k}={v}" for k, v in params.items())
+            if len(params_str) > 40:
+                params_str = params_str[:37] + "..."
+            table.add_row(
+                slurm_job_id, _format_state(state), time_used, node, params_str
+            )
+        else:
+            table.add_row(slurm_job_id, _format_state(state), time_used, node)
+
+    return table
+
+
+@cli.command()
+@click.argument("sweep_uuid", required=False)
+@click.option(
+    "--interval",
+    "-i",
+    type=float,
+    default=10.0,
+    help="Polling interval in seconds (default: 10)",
+)
+@click.option(
+    "--timeout",
+    "-t",
+    type=float,
+    default=0,
+    help="Timeout in seconds (0 = no timeout, default: 0)",
+)
+@click.option(
+    "--show-errors",
+    "-e",
+    is_flag=True,
+    help="Show error file contents for failed jobs",
+)
+@click.option(
+    "--error-lines",
+    type=int,
+    default=20,
+    help="Number of error lines to show (default: 20)",
+)
+def monitor(
+    sweep_uuid: Optional[str],
+    interval: float,
+    timeout: float,
+    show_errors: bool,
+    error_lines: int,
+):
+    """
+    Monitor jobs from a sweep until completion.
+
+    \b
+    SWEEP_UUID: UUID of the sweep to monitor (optional).
+                If not provided, monitors the most recent sweep.
+
+    \b
+    Press Ctrl+C to stop monitoring.
+
+    \b
+    Examples:
+        smanager monitor                    # Monitor last sweep
+        smanager monitor --interval 5       # Poll every 5 seconds
+        smanager monitor --timeout 3600     # Stop after 1 hour
+        smanager monitor -e                 # Show errors for failed jobs
+        smanager monitor a1b2c3d4           # Monitor specific sweep
+    """
+    try:
+        config = SManagerConfig()
+        script_dir = config.get_script_dir()
+
+        if not script_dir.exists():
+            console.print("[yellow]⚠[/yellow] No scripts directory found")
+            return
+
+        # Find the sweep
+        result = _find_sweep_for_kill(script_dir, sweep_uuid)
+        if result is None:
+            return
+
+        _, sweep_data = result
+        jobs_data = sweep_data.get("jobs", {})
+
+        # Get list of job IDs
+        job_ids = [
+            info.get("slurm_job_id")
+            for info in jobs_data.values()
+            if info.get("slurm_job_id")
+        ]
+
+        if not job_ids:
+            console.print("[yellow]⚠[/yellow] No submitted jobs found to monitor")
+            return
+
+        console.print(
+            Panel(
+                f"[bold]Sweep UUID:[/bold] {sweep_data.get('sweep_uuid', 'N/A')}\n"
+                f"[bold]Script:[/bold] {sweep_data.get('script', 'N/A')}\n"
+                f"[bold]Jobs:[/bold] {len(job_ids)}\n"
+                f"[bold]Interval:[/bold] {interval}s"
+                + (f"\n[bold]Timeout:[/bold] {timeout}s" if timeout > 0 else ""),
+                title="[bold blue]Monitoring Jobs[/bold blue]",
+                border_style="blue",
+            )
+        )
+        console.print("\n[dim]Press Ctrl+C to stop monitoring[/dim]\n")
+
+        _run_monitor_loop(
+            sweep_data, job_ids, interval, timeout, show_errors, error_lines
+        )
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Monitoring stopped by user[/yellow]")
+    except OSError as exc:
+        console.print(f"[red]✗ Error:[/red] {exc}")
+        sys.exit(1)
+
+
+def _run_monitor_loop(  # pylint: disable=too-many-positional-arguments
+    sweep_data: Dict,
+    job_ids: List[str],
+    interval: float,
+    timeout: float,
+    show_errors: bool,
+    error_lines: int,
+) -> None:
+    """Run the monitoring loop."""
+    start_time = time.time()
+    shown_errors: Set[str] = set()
+    all_complete = False
+
+    with Live(console=console, refresh_per_second=1) as live:
+        while True:
+            # Check timeout
+            elapsed = time.time() - start_time
+            if 0 < timeout <= elapsed:
+                console.print(f"\n[yellow]⚠[/yellow] Timeout reached ({timeout}s)")
+                break
+
+            # Get job status
+            status_map = _get_job_status(job_ids)
+
+            # Build and display table
+            table = _build_monitor_table(sweep_data, status_map)
+            live.update(table)
+
+            # Check for completion and failures
+            completed = 0
+            failed = 0
+            failed_jobs = []
+
+            for job_id in job_ids:
+                status = status_map.get(job_id, {})
+                state = status.get("state", "")
+
+                if state in JOB_STATUS_COMPLETED:
+                    completed += 1
+                elif state in JOB_STATUS_FAILED:
+                    failed += 1
+                    failed_jobs.append(job_id)
+
+            # Show errors for newly failed jobs
+            if show_errors and failed_jobs:
+                _show_job_errors(sweep_data, failed_jobs, shown_errors, error_lines)
+
+            # Check if all done
+            if completed + failed >= len(job_ids):
+                all_complete = True
+                break
+
+            time.sleep(interval)
+
+    # Final summary
+    console.print("\n")
+    _print_monitor_summary(job_ids, _get_job_status(job_ids), all_complete)
+
+
+def _show_job_errors(
+    sweep_data: Dict,
+    failed_jobs: List[str],
+    shown_errors: Set[str],
+    error_lines: int,
+) -> None:
+    """Show error output for failed jobs."""
+    jobs_data = sweep_data.get("jobs", {})
+
+    for job_info in jobs_data.values():
+        slurm_job_id = job_info.get("slurm_job_id")
+        if slurm_job_id not in failed_jobs:
+            continue
+        if slurm_job_id in shown_errors:
+            continue
+
+        # Look for error file in the sweep directory logs
+        # We stored the job_uuid in the sweep.json, error files are named {job_uuid}.err
+        error_file = None
+        for key in jobs_data:
+            if jobs_data[key].get("slurm_job_id") == slurm_job_id:
+                # Construct error path based on job UUID
+                sweep_dir = Path(sweep_data.get("script", ".")).parent
+                # Try common locations
+                possible_paths = [
+                    sweep_dir / "logs" / f"{key}.err",
+                    Path(f"slurm-{slurm_job_id}.out"),
+                ]
+                for p in possible_paths:
+                    if p.exists():
+                        error_file = str(p)
+                        break
+                break
+
+        if error_file:
+            error_content = _read_error_tail(error_file, error_lines)
+            if error_content:
+                console.print(
+                    Panel(
+                        Syntax(error_content, "text", theme="monokai"),
+                        title=f"[bold red]Error: Job {slurm_job_id}[/bold red]",
+                        border_style="red",
+                    )
+                )
+                shown_errors.add(slurm_job_id)
+
+
+def _print_monitor_summary(
+    job_ids: List[str], status_map: Dict[str, Dict], all_complete: bool
+) -> None:
+    """Print final monitoring summary."""
+    completed = 0
+    failed = 0
+    other = 0
+
+    for job_id in job_ids:
+        status = status_map.get(job_id, {})
+        state = status.get("state", "")
+
+        if state in JOB_STATUS_COMPLETED:
+            completed += 1
+        elif state in JOB_STATUS_FAILED:
+            failed += 1
+        else:
+            other += 1
+
+    total = len(job_ids)
+
+    if all_complete:
+        if failed == 0:
+            console.print(
+                Panel(
+                    f"[bold green]All {total} jobs completed![/bold green]",
+                    border_style="green",
+                )
+            )
+        else:
+            console.print(
+                Panel(
+                    f"[bold]Completed:[/bold] {completed}/{total}\n"
+                    f"[bold red]Failed:[/bold red] {failed}/{total}",
+                    title="[bold yellow]Jobs Finished[/bold yellow]",
+                    border_style="yellow",
+                )
+            )
+    else:
+        console.print(
+            Panel(
+                f"[bold]Completed:[/bold] {completed}/{total}\n"
+                f"[bold]Failed:[/bold] {failed}/{total}\n"
+                f"[bold]Other:[/bold] {other}/{total}",
+                title="[bold blue]Monitoring Summary[/bold blue]",
+                border_style="blue",
+            )
+        )
 
 
 def main():
