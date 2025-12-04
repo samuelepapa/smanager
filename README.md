@@ -19,11 +19,16 @@ A Python CLI tool for managing Slurm jobs and parameter sweeps with project-leve
 ## Installation
 
 ```bash
-# Install in development mode
-pip install -e .
+# Install from GitHub
+pip install git+https://github.com/samuelepapa/smanager.git
 
-# Or install directly
+# Or clone and install locally
+git clone https://github.com/samuelepapa/smanager.git
+cd smanager
 pip install .
+
+# Or install in development mode
+pip install -e .
 ```
 
 ## Quick Start
