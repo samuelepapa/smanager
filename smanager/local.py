@@ -94,6 +94,16 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
             args.append(arg)
         return args
 
+    @staticmethod
+    def _escape_for_bash_echo(text: str) -> str:
+        """Escape a string for safe use inside bash double quotes."""
+        # Escape backslashes first, then other special characters
+        text = text.replace("\\", "\\\\")
+        text = text.replace('"', '\\"')
+        text = text.replace("$", "\\$")
+        text = text.replace("`", "\\`")
+        return text
+
     def generate_param_sets(self) -> List[Dict[str, Any]]:
         """
         Generate all parameter sets from the sweep generator.
@@ -197,8 +207,10 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
             )
             params_str = ", ".join(f"{k}={v}" for k, v in params.items())
             lines.append(f"# Params: {params_str}")
+            escaped_params_str = self._escape_for_bash_echo(params_str)
             lines.append(
-                f'echo ">>> [{job_num + 1}/{len(job_indices)}] Running: {params_str}"'
+                f'echo ">>> [{job_num + 1}/{len(job_indices)}] '
+                f'Running: {escaped_params_str}"'
             )
             lines.append(cmd)
             lines.append("EXIT_CODE=$?")

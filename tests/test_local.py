@@ -350,3 +350,55 @@ def test_local_sweep_list_sessions_no_tmux(mock_run):
     sessions = LocalSweep.list_sweep_sessions("sweep")
 
     assert sessions == []
+
+
+def test_local_sweep_escapes_special_chars_in_echo():
+    """Test that special characters in params are escaped for bash echo."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "train.py"
+        script_path.write_text("print('train')")
+
+        # Create sweep with special characters (parentheses, quotes, etc.)
+        sweep_file = tmpdir / "special_sweeps.py"
+        sweep_file.write_text(
+            '''
+def special_sweep():
+    """Sweep with special bash characters."""
+    yield {"shape": '"(4,4,1)"', "cmd": "$HOME", "backtick": "`echo hi`"}
+'''
+        )
+
+        # Create .smanager
+        smanager_dir = tmpdir / ".smanager"
+        smanager_dir.mkdir()
+
+        local_obj = LocalSweep(
+            script_path=str(script_path),
+            sweep_file=str(sweep_file),
+            sweep_function="special_sweep",
+            workers=1,
+        )
+
+        paths = local_obj.save_scripts()
+        content = paths[0].read_text()
+
+        # Verify that special characters are properly escaped in echo statements
+        # Double quotes should be escaped as \"
+        assert r"\"(4,4,1)\"" in content
+        # Dollar sign should be escaped as \$
+        assert r"\$HOME" in content
+        # Backticks should be escaped as \`
+        assert r"\`echo hi\`" in content
+
+        # The script should be valid bash - no syntax errors
+        # We can verify by checking bash -n (syntax check only)
+        import subprocess  # pylint: disable=import-outside-toplevel
+
+        result = subprocess.run(
+            ["bash", "-n", str(paths[0])],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"Bash syntax error: {result.stderr}"
