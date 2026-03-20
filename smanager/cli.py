@@ -154,7 +154,7 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
             )
 
         console.print(f"[green]✓[/green] Script saved to: [cyan]{script_path}[/cyan]")
-        console.print(f"[dim]  Job UUID: {job.job_uuid}[/dim]")
+        console.print(f"[dim]  Job ID: {job.job_uuid}[/dim]")
 
         if job.config.config_dir:
             console.print(f"[dim]  Using config from: {job.config.config_dir}[/dim]")
@@ -1049,7 +1049,7 @@ def _collect_jobs_to_cancel(sweep_data: Dict, dry_run: bool) -> List[str]:
     job_ids_to_cancel = []
 
     table = Table(title="Jobs to Cancel")
-    table.add_column("Job UUID", style="cyan")
+    table.add_column("Job ID", style="cyan")
     table.add_column("Index", style="dim")
     table.add_column("Slurm Job ID", style="green")
     table.add_column("Status", style="yellow")
@@ -1516,7 +1516,7 @@ def _show_job_errors(
             continue
 
         # Look for error file in the sweep directory logs
-        # We stored the job_uuid in the sweep.json, error files are named {job_uuid}.err
+        # We stored the local job ID in the sweep.json, error files are named {job_id}.err
         error_file = None
         for key in jobs_data:
             if jobs_data[key].get("slurm_job_id") == slurm_job_id:

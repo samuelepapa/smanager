@@ -1,5 +1,6 @@
 """Tests for job creation and handling."""
 
+import re
 import tempfile
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from smanager.job import SlurmJob
 
 
 def test_job_uuid_generation():
-    """Test that jobs get unique UUIDs."""
+    """Test that jobs get unique local IDs."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir).resolve()
         script_path = tmpdir / "script.py"
@@ -17,7 +18,7 @@ def test_job_uuid_generation():
         job2 = SlurmJob(script_path=str(script_path))
 
         assert job1.job_uuid != job2.job_uuid
-        assert len(job1.job_uuid) == 36  # UUID format
+        assert re.fullmatch(r"\d{14}\.[0-9a-f]{8}", job1.job_uuid)
 
 
 def test_job_script_generation():

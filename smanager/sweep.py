@@ -236,8 +236,13 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
         if script_dir is None:
             script_dir = self.config.get_script_dir()
 
-        # Create sweep directory using UUID
-        self.sweep_dir = script_dir / self.experiment_name / self.sweep_uuid
+        # Group sweep runs by function name, then isolate each run by UUID
+        self.sweep_dir = (
+            script_dir
+            / self.experiment_name
+            / self.sweep_function_name
+            / self.sweep_uuid
+        )
         self.sweep_dir.mkdir(parents=True, exist_ok=True)
 
         # Create logs subdirectory

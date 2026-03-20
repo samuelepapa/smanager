@@ -2,6 +2,7 @@
 
 import subprocess
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,6 +12,13 @@ from .templates import SbatchTemplate
 
 class SlurmJob:  # pylint: disable=too-many-instance-attributes
     """Represents a single Slurm job."""
+
+    @staticmethod
+    def _generate_local_job_id() -> str:
+        """Generate a local job ID in timestamp.shortid format."""
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        short_id = uuid.uuid4().hex[:8]
+        return f"{timestamp}.{short_id}"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -117,8 +125,8 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
         self.working_dir = Path(working_dir).resolve() if working_dir else Path.cwd()
         self.template = template or SbatchTemplate()
 
-        # Generate UUID for this job
-        self.job_uuid = str(uuid.uuid4())
+        # Generate a local ID for this job
+        self.job_uuid = self._generate_local_job_id()
 
         # Generated script path (set after generate())
         self.sbatch_script_path: Optional[Path] = None
@@ -129,7 +137,7 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
         Generate the sbatch script content.
 
         Args:
-            job_name: Custom job name (uses UUID if not provided).
+            job_name: Custom job name (uses local job ID if not provided).
 
         Returns:
             The sbatch script content as a string.

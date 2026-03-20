@@ -339,7 +339,7 @@ smanager local-list [PREFIX]
 
 ## Project Structure
 
-When you run jobs, scripts and logs are organized by UUID. Folder names use `parent.script` format based on the script location:
+When you run jobs, scripts and logs are organized by ID. Folder names use `parent.script` format based on the script location. Single-job IDs use `YYYYMMDDHHMMSS.shortuuid`:
 
 ```
 your_project/
@@ -349,19 +349,20 @@ your_project/
 │   ├── sweeps.py
 │   └── scripts/
 │       ├── experiments.train/                  # from experiments/train.py
-│       │   ├── a1b2c3d4-...-ef12.sbatch       # single job (UUID)
+│       │   ├── 20260320172620.e3687c33.sbatch # single job (job ID)
 │       │   └── logs/
-│       │       ├── a1b2c3d4-...-ef12.out      # stdout
-│       │       └── a1b2c3d4-...-ef12.err      # stderr
+│       │       ├── 20260320172620.e3687c33.out # stdout
+│       │       └── 20260320172620.e3687c33.err # stderr
 │       └── experiments.train/                  # sweeps use same folder
-│           └── f5e6d7c8-...-1234/             # sweep UUID
-│               ├── sweep.json                  # parameter mapping
-│               ├── abc123-....sbatch          # job 0
-│               ├── def456-....sbatch          # job 1
-│               └── logs/
-│                   ├── abc123-....out
-│                   ├── abc123-....err
-│                   └── ...
+│           └── grid_sweep/                     # sweep function name
+│               └── f5e6d7c8-...-1234/         # sweep UUID
+│                   ├── sweep.json              # parameter mapping
+│                   ├── 20260320172620.abcd1234.sbatch # job 0
+│                   ├── 20260320172621.ef567890.sbatch # job 1
+│                   └── logs/
+│                       ├── 20260320172620.abcd1234.out
+│                       ├── 20260320172620.abcd1234.err
+│                       └── ...
 ├── experiments/
 │   └── train.py
 └── sweeps.py
@@ -374,7 +375,7 @@ your_project/
 | `experiments/train.py` | `experiments.train` |
 | `src/models/vae.py` | `models.vae` |
 
-The `sweep.json` file maps job UUIDs to their parameters:
+The `sweep.json` file maps local job IDs to their parameters:
 
 ```json
 {
@@ -383,7 +384,7 @@ The `sweep.json` file maps job UUIDs to their parameters:
   "sweep_function": "grid_search",
   "total_jobs": 9,
   "jobs": {
-    "abc123-...": {
+    "20260320172620.abcd1234": {
       "index": 0,
       "params": {"lr": 0.1, "batch_size": 32},
       "slurm_job_id": "12345"
