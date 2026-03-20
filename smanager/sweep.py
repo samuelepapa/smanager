@@ -3,13 +3,12 @@
 import importlib.util
 import json
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional
 
 from .config import SManagerConfig
-from .job import SlurmJob
+from .job import SlurmJob, generate_timestamp_shortuuid
 
 
 def load_sweep_function(
@@ -164,8 +163,8 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
         }
         self.working_dir = working_dir
 
-        # Generate UUID for the entire sweep
-        self.sweep_uuid = str(uuid.uuid4())
+        # Generate a local ID for the entire sweep
+        self.sweep_uuid = generate_timestamp_shortuuid()
 
         # Track generated jobs
         self.jobs: List[SlurmJob] = []

@@ -2,12 +2,12 @@
 
 import json
 import subprocess
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .config import SManagerConfig
+from .job import generate_timestamp_shortuuid
 from .sweep import load_sweep_function
 
 
@@ -78,8 +78,8 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
 
         self.config = config or SManagerConfig(self.script_path)
 
-        # Generate UUID for this local sweep
-        self.sweep_uuid = str(uuid.uuid4())
+        # Generate a local ID for this local sweep
+        self.sweep_uuid = generate_timestamp_shortuuid()
 
         # Store generated configurations
         self.param_sets: List[Dict[str, Any]] = []
@@ -237,7 +237,12 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
 
         # Create sweep directory
         script_dir = self.config.get_script_dir()
-        self.sweep_dir = script_dir / self.experiment_name / f"local_{self.sweep_uuid}"
+        self.sweep_dir = (
+            script_dir
+            / self.experiment_name
+            / self.sweep_function_name
+            / self.sweep_uuid
+        )
         self.sweep_dir.mkdir(parents=True, exist_ok=True)
 
         # Create logs directory

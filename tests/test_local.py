@@ -1,6 +1,7 @@
 """Tests for local sweep handling."""
 
 import json
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -222,6 +223,8 @@ def test_local_sweep_save_scripts():
         # Check logs directory was created
         logs_dir = local_obj.sweep_dir / "logs"
         assert logs_dir.exists()
+        assert re.fullmatch(r"\d{14}\.[0-9a-f]{8}", local_obj.sweep_dir.name)
+        assert re.fullmatch(r"\d{14}\.[0-9a-f]{8}", local_obj.sweep_uuid)
 
 
 def test_local_sweep_script_contains_preamble():

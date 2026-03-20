@@ -315,7 +315,7 @@ def _display_sweep_info(
             f"[bold]Script:[/bold] {script}\n"
             f"[bold]Sweep File:[/bold] {sweep_file}\n"
             f"[bold]Sweep Function:[/bold] {sweep_function}\n"
-            f"[bold]Sweep UUID:[/bold] {sweep_obj.sweep_uuid}\n"
+            f"[bold]Sweep ID:[/bold] {sweep_obj.sweep_uuid}\n"
             f"[bold]Total Jobs:[/bold] {len(sweep_obj.jobs)}",
             title="[bold blue]Parameter Sweep[/bold blue]",
             border_style="blue",
@@ -534,7 +534,7 @@ def _display_local_sweep_info(
             f"[bold]Script:[/bold] {script}\n"
             f"[bold]Sweep File:[/bold] {sweep_file}\n"
             f"[bold]Sweep Function:[/bold] {sweep_function}\n"
-            f"[bold]Sweep UUID:[/bold] {local_obj.sweep_uuid}\n"
+            f"[bold]Sweep ID:[/bold] {local_obj.sweep_uuid}\n"
             f"[bold]Total Jobs:[/bold] {len(local_obj.param_sets)}\n"
             f"[bold]Workers:[/bold] {local_obj.workers}\n"
             f"[bold]GPUs:[/bold] {gpu_str}",
@@ -1013,7 +1013,7 @@ def _find_sweep_for_kill(
     if sweep_uuid:
         result = _find_sweep_by_uuid(script_dir, sweep_uuid)
         if not result:
-            console.print(f"[red]✗[/red] Sweep with UUID '{sweep_uuid}' not found")
+            console.print(f"[red]✗[/red] Sweep with ID '{sweep_uuid}' not found")
             sys.exit(1)
         return result
 
@@ -1033,7 +1033,7 @@ def _display_kill_info(sweep_data: Dict, dry_run: bool) -> None:
     )
     console.print(
         Panel(
-            f"[bold]Sweep UUID:[/bold] {sweep_data.get('sweep_uuid', 'N/A')}\n"
+            f"[bold]Sweep ID:[/bold] {sweep_data.get('sweep_uuid', 'N/A')}\n"
             f"[bold]Script:[/bold] {sweep_data.get('script', 'N/A')}\n"
             f"[bold]Created:[/bold] {sweep_data.get('created_at', 'N/A')}\n"
             f"[bold]Total Jobs:[/bold] {sweep_data.get('total_jobs', 0)}",
@@ -1418,7 +1418,7 @@ def monitor(
 
         console.print(
             Panel(
-                f"[bold]Sweep UUID:[/bold] {sweep_data.get('sweep_uuid', 'N/A')}\n"
+                f"[bold]Sweep ID:[/bold] {sweep_data.get('sweep_uuid', 'N/A')}\n"
                 f"[bold]Script:[/bold] {sweep_data.get('script', 'N/A')}\n"
                 f"[bold]Jobs:[/bold] {len(job_ids)}\n"
                 f"[bold]Interval:[/bold] {interval}s"

@@ -10,15 +10,15 @@ from .config import SManagerConfig
 from .templates import SbatchTemplate
 
 
+def generate_timestamp_shortuuid() -> str:
+    """Generate an ID in timestamp.shortuuid format."""
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    short_id = uuid.uuid4().hex[:8]
+    return f"{timestamp}.{short_id}"
+
+
 class SlurmJob:  # pylint: disable=too-many-instance-attributes
     """Represents a single Slurm job."""
-
-    @staticmethod
-    def _generate_local_job_id() -> str:
-        """Generate a local job ID in timestamp.shortid format."""
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        short_id = uuid.uuid4().hex[:8]
-        return f"{timestamp}.{short_id}"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -126,7 +126,7 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
         self.template = template or SbatchTemplate()
 
         # Generate a local ID for this job
-        self.job_uuid = self._generate_local_job_id()
+        self.job_uuid = generate_timestamp_shortuuid()
 
         # Generated script path (set after generate())
         self.sbatch_script_path: Optional[Path] = None

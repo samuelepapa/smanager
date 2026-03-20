@@ -1,5 +1,6 @@
 """Tests for sweep handling."""
 
+import re
 import tempfile
 from pathlib import Path
 
@@ -166,3 +167,5 @@ def test_sweep_save_scripts():
         # Check sweep directory is grouped by function name
         assert sweep_obj.sweep_dir.parent.name == "simple_sweep"
         assert sweep_obj.sweep_dir.parent.parent.name == sweep_obj.experiment_name
+        assert re.fullmatch(r"\d{14}\.[0-9a-f]{8}", sweep_obj.sweep_dir.name)
+        assert re.fullmatch(r"\d{14}\.[0-9a-f]{8}", sweep_obj.sweep_uuid)

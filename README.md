@@ -339,7 +339,7 @@ smanager local-list [PREFIX]
 
 ## Project Structure
 
-When you run jobs, scripts and logs are organized by ID. Folder names use `parent.script` format based on the script location. Single-job IDs use `YYYYMMDDHHMMSS.shortuuid`:
+When you run jobs, scripts and logs are organized by ID. Folder names use `parent.script` format based on the script location. Job and sweep IDs use `YYYYMMDDHHMMSS.shortuuid`:
 
 ```
 your_project/
@@ -355,7 +355,7 @@ your_project/
 │       │       └── 20260320172620.e3687c33.err # stderr
 │       └── experiments.train/                  # sweeps use same folder
 │           └── grid_sweep/                     # sweep function name
-│               └── f5e6d7c8-...-1234/         # sweep UUID
+│               └── 20260320172620.f5e6d7c8/   # sweep ID
 │                   ├── sweep.json              # parameter mapping
 │                   ├── 20260320172620.abcd1234.sbatch # job 0
 │                   ├── 20260320172621.ef567890.sbatch # job 1
@@ -375,11 +375,11 @@ your_project/
 | `experiments/train.py` | `experiments.train` |
 | `src/models/vae.py` | `models.vae` |
 
-The `sweep.json` file maps local job IDs to their parameters:
+The `sweep.json` file maps local job IDs and sweep IDs to their parameters:
 
 ```json
 {
-  "sweep_uuid": "f5e6d7c8-...",
+  "sweep_uuid": "20260320172620.f5e6d7c8",
   "script": "/path/to/train.py",
   "sweep_function": "grid_search",
   "total_jobs": 9,
