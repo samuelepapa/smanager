@@ -1516,7 +1516,8 @@ def _show_job_errors(
             continue
 
         # Look for error file in the sweep directory logs
-        # We stored the local job ID in the sweep.json, error files are named {job_id}.err
+        # We stored the local job ID in the sweep.json,
+        # error files are named {job_id}.err
         error_file = None
         for key in jobs_data:
             if jobs_data[key].get("slurm_job_id") == slurm_job_id:
