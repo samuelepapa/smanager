@@ -167,4 +167,4 @@ def test_sweep_save_scripts():
 
         # Check sweep directory is grouped by function name
         assert sweep_obj.sweep_dir.parent.name == "simple_sweep"
-        assert sweep_obj.sweep_dir.parent.parent.name == "experiments.train"
+        assert sweep_obj.sweep_dir.parent.parent.name == sweep_obj.experiment_name
