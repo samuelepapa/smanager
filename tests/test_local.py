@@ -14,7 +14,8 @@ from smanager.local import LocalSweep
 def create_sweep_file(tmpdir: Path) -> Path:
     """Create a test sweep file."""
     sweep_file = tmpdir / "sweeps.py"
-    sweep_file.write_text('''
+    sweep_file.write_text(
+        '''
 def simple_sweep():
     """Simple test sweep."""
     for lr in [0.1, 0.01]:
@@ -31,17 +32,20 @@ def grid_sweep():
 def invalid_sweep():
     """Sweep that yields non-dict."""
     yield "not a dict"
-''')
+'''
+    )
     return sweep_file
 
 
 def create_preamble(smanager_dir: Path) -> None:
     """Create a test preamble file."""
     preamble = smanager_dir / "preamble.sh"
-    preamble.write_text("""# Test preamble
+    preamble.write_text(
+        """# Test preamble
 source ~/miniconda3/bin/activate
 conda activate myenv
-""")
+"""
+    )
 
 
 def test_local_sweep_generate_param_sets():
@@ -360,11 +364,13 @@ def test_local_sweep_escapes_special_chars_in_echo():
 
         # Create sweep with special characters (parentheses, quotes, etc.)
         sweep_file = tmpdir / "special_sweeps.py"
-        sweep_file.write_text('''
+        sweep_file.write_text(
+            '''
 def special_sweep():
     """Sweep with special bash characters."""
     yield {"shape": '"(4,4,1)"', "cmd": "$HOME", "backtick": "`echo hi`"}
-''')
+'''
+        )
 
         # Create .smanager
         smanager_dir = tmpdir / ".smanager"

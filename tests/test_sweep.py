@@ -12,7 +12,8 @@ from smanager.sweep import Sweep, load_sweep_function
 def create_sweep_file(tmpdir: Path) -> Path:
     """Create a test sweep file."""
     sweep_file = tmpdir / "sweeps.py"
-    sweep_file.write_text('''
+    sweep_file.write_text(
+        '''
 def simple_sweep():
     """Simple test sweep."""
     for lr in [0.1, 0.01]:
@@ -29,7 +30,8 @@ def grid_sweep():
 def invalid_sweep():
     """Sweep that yields non-dict."""
     yield "not a dict"
-''')
+'''
+    )
     return sweep_file
 
 
