@@ -47,6 +47,12 @@ smanager = "smanager.cli:main"
 [tool.setuptools.packages.find]
 include = ["smanager*"]
 
+[tool.setuptools.package-data]
+smanager = [
+    "templates/**/*.html",
+    "static/*",
+]
+
 # Black configuration
 [tool.black]
 line-length = 88
