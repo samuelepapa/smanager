@@ -272,7 +272,8 @@ smanager history [OPTIONS]
 
 ### `smanager web`
 
-Launch the local dashboard for browsing jobs and logs.
+Launch the local dashboard for browsing jobs and logs. By default this uses a
+production WSGI server (`waitress`) instead of Flask's development server.
 
 ```
 smanager web [OPTIONS]
@@ -283,7 +284,7 @@ smanager web [OPTIONS]
 |--------|-------------|
 | `--host` | Bind host (default: 127.0.0.1) |
 | `--port` | Bind port (default: 8000) |
-| `--debug` | Run Flask in debug mode |
+| `--debug` | Run Flask's development server in debug mode |
 
 ### `smanager init`
 

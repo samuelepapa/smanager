@@ -7,9 +7,9 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, List, Optional
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from smanager.webapp import create_app
+from smanager.webapp import create_app, serve
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -381,3 +381,29 @@ def test_dashboard_404_for_missing_job():
             response = client.get("/jobs/does-not-exist")
 
         assert response.status_code == 404
+
+
+def test_serve_uses_waitress_by_default():
+    """Normal web mode should use a WSGI server instead of Flask dev server."""
+    fake_app = MagicMock()
+    with patch("smanager.webapp.create_app", return_value=fake_app), patch(
+        "smanager.webapp.waitress_serve"
+    ) as waitress_mock, patch("smanager.webapp.console.print") as print_mock:
+        serve(host="0.0.0.0", port=9000, debug=False)
+
+    fake_app.run.assert_not_called()
+    waitress_mock.assert_called_once_with(fake_app, host="0.0.0.0", port=9000)
+    print_mock.assert_called_once()
+
+
+def test_serve_uses_flask_debug_server_when_requested():
+    """Debug mode should keep the Flask development server available."""
+    fake_app = MagicMock()
+    with patch("smanager.webapp.create_app", return_value=fake_app), patch(
+        "smanager.webapp.waitress_serve"
+    ) as waitress_mock, patch("smanager.webapp.console.print") as print_mock:
+        serve(host="127.0.0.1", port=8000, debug=True)
+
+    fake_app.run.assert_called_once_with(host="127.0.0.1", port=8000, debug=True)
+    waitress_mock.assert_not_called()
+    print_mock.assert_called_once()

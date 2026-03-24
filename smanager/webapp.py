@@ -6,13 +6,20 @@ from pathlib import Path
 from typing import List, Optional
 
 from flask import Flask, abort, redirect, render_template, request, url_for
+from rich.console import Console
 
 from .config import SManagerConfig, find_project_root
 from .history import JobRecord, cancel_job, discover_jobs, find_job, refresh_status
 
+try:
+    from waitress import serve as waitress_serve
+except ImportError:  # pragma: no cover - dependency is installed in normal use
+    waitress_serve = None
+
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
+console = Console()
 
 
 def _sort_key(record: JobRecord) -> str:
@@ -140,4 +147,23 @@ def create_app(project_root: Optional[Path] = None) -> Flask:
 def serve(host: str = "127.0.0.1", port: int = 8000, debug: bool = False) -> None:
     """Run the dashboard server."""
     app = create_app()
-    app.run(host=host, port=port, debug=debug)
+    if debug:
+        console.print(
+            f"[green]Starting SManager dashboard[/green] on "
+            f"[cyan]http://{host}:{port}[/cyan] "
+            "[dim](Flask development server)[/dim]"
+        )
+        app.run(host=host, port=port, debug=True)
+        return
+
+    if waitress_serve is None:
+        raise RuntimeError(
+            "waitress is required for the web dashboard. Install it with "
+            "'pip install waitress' or 'pip install .'."
+        )
+
+    console.print(
+        f"[green]Starting SManager dashboard[/green] on "
+        f"[cyan]http://{host}:{port}[/cyan] [dim](Waitress)[/dim]"
+    )
+    waitress_serve(app, host=host, port=port)

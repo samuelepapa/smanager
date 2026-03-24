@@ -16,6 +16,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
+from . import __version__
 from .config import SManagerConfig
 from .job import SlurmJob
 from .local import LocalSweep
@@ -31,7 +32,7 @@ def parse_extra_args(args: Tuple[str, ...]) -> List[str]:
 
 
 @click.group()
-@click.version_option(version="0.3.0", prog_name="smanager")
+@click.version_option(version=__version__, prog_name="smanager")
 def cli():
     """
     Slurm Manager - A CLI tool for managing Slurm jobs and parameter sweeps.
