@@ -44,7 +44,7 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
         exclude: Optional[str] = None,
         nodelist: Optional[str] = None,
         extra_sbatch_args: Optional[List[str]] = None,
-        python_executable: str = "python",
+        executable: str = "python",
         template: Optional[SbatchTemplate] = None,
         working_dir: Optional[str] = None,
     ):
@@ -73,7 +73,7 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
             exclude: Nodes to exclude.
             nodelist: Specific nodes to use.
             extra_sbatch_args: Extra sbatch arguments.
-            python_executable: Python executable to use.
+            executable: Python executable to use.
             template: Custom sbatch template.
             working_dir: Working directory for the job.
         """
@@ -118,8 +118,8 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
         self.extra_sbatch_args = extra_sbatch_args or defaults.get(
             "extra_sbatch_args", []
         )
-        self.python_executable = python_executable or defaults.get(
-            "python_executable", "python"
+        self.executable = executable or defaults.get(
+            "executable", defaults.get("python_executable", "python")
         )
 
         self.working_dir = Path(working_dir).resolve() if working_dir else Path.cwd()
@@ -153,7 +153,7 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
             working_dir=str(self.working_dir),
             script_args=script_args_str,
             preamble=self.config.get_preamble(),
-            python_executable=self.python_executable,
+            executable=self.executable,
             partition=self.partition,
             gpus=self.gpus,
             memory=self.memory,

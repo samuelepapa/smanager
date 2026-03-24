@@ -84,7 +84,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
         exclude: Optional[str] = None,
         nodelist: Optional[str] = None,
         extra_sbatch_args: Optional[List[str]] = None,
-        python_executable: str = "python",
+        executable: str = "python",
         working_dir: Optional[str] = None,
     ):
         """
@@ -115,7 +115,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
             exclude: Nodes to exclude.
             nodelist: Specific nodes to use.
             extra_sbatch_args: Extra sbatch arguments.
-            python_executable: Python executable.
+            executable: Python executable.
             working_dir: Working directory.
         """
         self.script_path = Path(script_path).resolve()
@@ -159,7 +159,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
             "exclude": exclude,
             "nodelist": nodelist,
             "extra_sbatch_args": extra_sbatch_args,
-            "python_executable": python_executable,
+            "executable": executable,
         }
         self.working_dir = working_dir
 

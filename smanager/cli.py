@@ -30,7 +30,7 @@ def parse_extra_args(args: Tuple[str, ...]) -> List[str]:
 
 
 @click.group()
-@click.version_option(version="0.2.0", prog_name="smanager")
+@click.version_option(version="0.2.3", prog_name="smanager")
 def cli():
     """
     Slurm Manager - A CLI tool for managing Slurm jobs and parameter sweeps.
@@ -66,9 +66,7 @@ def cli():
 @click.option("--error", "-e", help="Error file pattern")
 @click.option("--mail-type", help="Mail notification type (BEGIN,END,FAIL,ALL)")
 @click.option("--mail-user", help="Email address for notifications")
-@click.option(
-    "--python", "python_executable", default="python", help="Python executable"
-)
+@click.option("--executable", default="python", help="Python executable")
 @click.option("--working-dir", "-w", type=click.Path(), help="Working directory")
 @click.option("--dry-run", "-d", is_flag=True, help="Generate script but do not submit")
 @click.option("--show", "-s", is_flag=True, help="Show generated script")
@@ -95,7 +93,7 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
     error: Optional[str],
     mail_type: Optional[str],
     mail_user: Optional[str],
-    python_executable: str,
+    executable: str,
     working_dir: Optional[str],
     dry_run: bool,
     show: bool,
@@ -137,7 +135,7 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
             exclude=exclude,
             nodelist=nodelist,
             extra_sbatch_args=list(sbatch_arg) if sbatch_arg else None,
-            python_executable=python_executable,
+            executable=executable,
             working_dir=working_dir,
         )
 
@@ -201,9 +199,7 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
 @click.option("--error", "-e", help="Error file pattern")
 @click.option("--mail-type", help="Mail notification type")
 @click.option("--mail-user", help="Email address for notifications")
-@click.option(
-    "--python", "python_executable", default="python", help="Python executable"
-)
+@click.option("--executable", default="python", help="Python executable")
 @click.option("--working-dir", "-w", type=click.Path(), help="Working directory")
 @click.option(
     "--dry-run", "-d", is_flag=True, help="Generate scripts but do not submit"
@@ -239,7 +235,7 @@ def sweep(  # pylint: disable=too-many-arguments,too-many-positional-arguments,t
     error: Optional[str],
     mail_type: Optional[str],
     mail_user: Optional[str],
-    python_executable: str,
+    executable: str,
     working_dir: Optional[str],
     dry_run: bool,
     delay: float,
@@ -287,7 +283,7 @@ def sweep(  # pylint: disable=too-many-arguments,too-many-positional-arguments,t
             exclude=exclude,
             nodelist=nodelist,
             extra_sbatch_args=list(sbatch_arg) if sbatch_arg else None,
-            python_executable=python_executable,
+            executable=executable,
             working_dir=working_dir,
         )
 
@@ -386,9 +382,7 @@ def _save_and_submit_sweep(sweep_obj: Sweep, dry_run: bool, delay: float) -> Non
     "-g",
     help="Comma-separated GPU IDs to use (e.g., '0,1,2,3')",
 )
-@click.option(
-    "--python", "python_executable", default="python", help="Python executable"
-)
+@click.option("--executable", default="python", help="Python executable")
 @click.option("--working-dir", type=click.Path(), help="Working directory")
 @click.option(
     "--session-prefix",
@@ -413,7 +407,7 @@ def local_sweep(  # pylint: disable=too-many-arguments,too-many-positional-argum
     name: Optional[str],
     workers: int,
     gpus: Optional[str],
-    python_executable: str,
+    executable: str,
     working_dir: Optional[str],
     session_prefix: str,
     dry_run: bool,
@@ -458,7 +452,7 @@ def local_sweep(  # pylint: disable=too-many-arguments,too-many-positional-argum
             arg_format=arg_format,
             workers=workers,
             gpus=gpus,
-            python_executable=python_executable,
+            executable=executable,
             working_dir=working_dir,
             session_prefix=session_prefix,
         )
@@ -716,7 +710,7 @@ def _write_default_config(smanager_dir: Path) -> None:
 # time: "24:00:00"
 # cpus_per_task: 4
 # account: your_account
-# python_executable: python
+# executable: python
 
 # Extra sbatch arguments (list)
 # extra_sbatch_args:

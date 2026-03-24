@@ -66,7 +66,7 @@ DEFAULT_TEMPLATE = """#!/bin/bash
 cd {{ working_dir }}
 
 # Run the Python script
-{{ python_executable }} {{ script_path }}{% if script_args %} {{ script_args }}{% endif %}
+{{ executable }} {{ script_path }}{% if script_args %} {{ script_args }}{% endif %}
 """
 
 
@@ -90,7 +90,7 @@ class SbatchTemplate:
         working_dir: str,
         script_args: str = "",
         preamble: str = "",
-        python_executable: str = "python",
+        executable: str = "python",
         *,
         partition: Optional[str] = None,
         gpus: Optional[int] = None,
@@ -126,7 +126,7 @@ class SbatchTemplate:
             "working_dir": working_dir,
             "script_args": script_args,
             "preamble": preamble.strip() if preamble else "",
-            "python_executable": python_executable,
+            "executable": executable,
             "partition": partition,
             "gpus": gpus,
             "memory": memory,

@@ -25,7 +25,7 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
         arg_format: str = "--{key}={value}",
         workers: int = 1,
         gpus: Optional[str] = None,
-        python_executable: str = "python",
+        executable: str = "python",
         working_dir: Optional[str] = None,
         session_prefix: str = "sweep",
     ):
@@ -43,7 +43,7 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
             workers: Number of parallel tmux sessions/workers.
             gpus: Comma-separated GPU IDs to use (e.g., "0,1,2,3").
                   If not specified, GPUs are assigned round-robin style.
-            python_executable: Python executable to use.
+            executable: Python executable to use.
             working_dir: Working directory for the script.
             session_prefix: Prefix for tmux session names.
         """
@@ -53,7 +53,7 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
         self.base_args = base_args or []
         self.arg_format = arg_format
         self.workers = workers
-        self.python_executable = python_executable
+        self.executable = executable
         self.working_dir = working_dir or str(Path.cwd())
         self.session_prefix = session_prefix
 
@@ -199,7 +199,7 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
             all_args = self.base_args + sweep_args
 
             # Build the command
-            cmd_parts = [self.python_executable, str(self.script_path)] + all_args
+            cmd_parts = [self.executable, str(self.script_path)] + all_args
             cmd = " ".join(cmd_parts)
 
             lines.append(

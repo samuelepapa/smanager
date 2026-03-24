@@ -202,7 +202,7 @@ smanager run [OPTIONS] SCRIPT [SCRIPT_ARGS]...
 | `--error` | `-e` | Error file pattern |
 | `--mail-type` | | Mail notification type |
 | `--mail-user` | | Email for notifications |
-| `--python` | | Python executable (default: python) |
+| `--executable` | | Python executable (default: python) |
 | `--working-dir` | `-w` | Working directory (default: current directory) |
 | `--dry-run` | `-d` | Generate script without submitting |
 | `--show` | `-s` | Display generated script |
@@ -301,7 +301,7 @@ smanager local [OPTIONS] SCRIPT SWEEP_FILE SWEEP_FUNCTION [BASE_ARGS]...
 | `--gpus` | `-g` | Comma-separated GPU IDs (e.g., '0,1,2,3') |
 | `--name` | `-n` | Experiment name |
 | `--session-prefix` | `-s` | Prefix for tmux session names (default: sweep) |
-| `--python` | | Python executable (default: python) |
+| `--executable` | | Python executable (default: python) |
 | `--working-dir` | | Working directory |
 | `--dry-run` | `-d` | Generate scripts without launching tmux |
 | `--show` | | Display generated worker scripts |
