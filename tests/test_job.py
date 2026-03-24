@@ -1,8 +1,11 @@
 """Tests for job creation and handling."""
 
+import json
 import re
+import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from smanager.job import SlurmJob
 
@@ -86,6 +89,59 @@ def test_job_save_script():
         # Check logs directory was created
         logs_dir = saved_path.parent / "logs"
         assert logs_dir.exists()
+
+        manifest_path = saved_path.with_suffix(".json")
+        assert manifest_path.exists()
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["kind"] == "job"
+        assert manifest["job_uuid"] == job.job_uuid
+        assert manifest["dry_run"] is False
+        assert manifest["slurm_job_id"] is None
+        assert manifest["sbatch_path"] == str(saved_path)
+
+
+def test_job_save_script_dry_run_manifest():
+    """Test dry-run job manifests are marked and persisted."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "train.py"
+        script_path.write_text("print('train')")
+
+        job = SlurmJob(script_path=str(script_path))
+        saved_path = job.save_script(dry_run=True)
+        manifest = json.loads(
+            saved_path.with_suffix(".json").read_text(encoding="utf-8")
+        )
+
+        assert manifest["dry_run"] is True
+        assert manifest["submitted_at"] is None
+        assert manifest["slurm_job_id"] is None
+
+
+def test_job_submit_updates_manifest():
+    """Test that submitting a job updates the manifest with Slurm metadata."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "train.py"
+        script_path.write_text("print('train')")
+
+        job = SlurmJob(script_path=str(script_path))
+        job.save_script()
+
+        completed = subprocess.CompletedProcess(
+            args=["sbatch"],
+            returncode=0,
+            stdout="Submitted batch job 12345\n",
+            stderr="",
+        )
+        with patch("smanager.job.subprocess.run", return_value=completed):
+            job_id = job.submit()
+
+        assert job_id == "12345"
+        manifest = json.loads(job.manifest_path.read_text(encoding="utf-8"))
+        assert manifest["slurm_job_id"] == "12345"
+        assert manifest["submitted_at"] is not None
 
 
 def test_job_experiment_name_default():

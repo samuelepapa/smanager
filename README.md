@@ -15,6 +15,7 @@ A Python CLI tool for managing Slurm jobs and parameter sweeps with project-leve
 - **Script Organization**: Automatically organizes generated sbatch scripts by experiment name
 - **Preamble Support**: Add common setup commands (conda activation, environment variables, etc.) that apply to all jobs in a project
 - **Job Management**: Kill sweeps, view history, and manage running jobs
+- **Web Dashboard**: Browse job history, inspect logs, and cancel jobs from a local browser
 
 ## Installation
 
@@ -136,6 +137,13 @@ smanager sweep train.py sweeps.py custom_sweep -- --epochs 100 --data cifar10
 # View recent sweeps
 smanager history
 
+# Launch the local web dashboard
+smanager web
+
+# Optional: launch against the ignored demo project tree
+cd web-demo
+smanager web
+
 # Kill all jobs from the last sweep
 smanager kill
 
@@ -171,6 +179,12 @@ Each worker runs in its own tmux session with:
 - Assigned GPU(s) via `CUDA_VISIBLE_DEVICES`
 - Environment setup from your preamble
 - A subset of the sweep jobs running sequentially
+
+### Web Dashboard Smoke Test Data
+
+For local dashboard verification, this repository can include an ignored `web-demo/`
+project tree with fake scripts and job manifests. It is safe to create or refresh
+that directory locally without affecting version control.
 
 ## CLI Reference
 
@@ -255,6 +269,21 @@ smanager history [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--last` / `-l` | Number of sweeps to show (default: 5) |
+
+### `smanager web`
+
+Launch the local dashboard for browsing jobs and logs.
+
+```
+smanager web [OPTIONS]
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--host` | Bind host (default: 127.0.0.1) |
+| `--port` | Bind port (default: 8000) |
+| `--debug` | Run Flask in debug mode |
 
 ### `smanager init`
 

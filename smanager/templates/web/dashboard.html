@@ -1,0 +1,56 @@
+{% extends "web/base.html" %}
+{% block title %}SManager Dashboard{% endblock %}
+{% block content %}
+<div class="header">
+  <div>
+    <h1 class="title">SManager Dashboard</h1>
+    <div class="subtitle">Browse submitted jobs, inspect logs, review hyperparameters, and manage active Slurm jobs from a local browser.</div>
+  </div>
+  <div class="toolbar">
+    <span class="chip">Jobs: {{ records|length }}</span>
+    <a class="btn primary" href="{{ url_for('dashboard', show_dry_run=0 if show_dry_run else 1) }}">
+      {{ "Hide dry-run jobs" if show_dry_run else "Show dry-run jobs" }}
+    </a>
+  </div>
+</div>
+
+<div class="panel table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Job</th>
+        <th>Run Time</th>
+        <th>Duration</th>
+        <th>GPUs</th>
+        <th>Partition</th>
+        <th>Status</th>
+        <th>Slurm ID</th>
+        <th>Type</th>
+        <th>Open</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if records %}
+        {% for record in records %}
+        <tr>
+          <td>
+            <a href="{{ url_for('job_detail', job_uuid=record.job_uuid) }}">{{ record.experiment_name }}</a>
+            <div class="muted">{{ record.job_uuid }}</div>
+          </td>
+          <td>{{ record.run_started_at }}</td>
+          <td>{{ record.run_time }}</td>
+          <td>{{ format_gpus(record) }}</td>
+          <td>{{ record.partition or "-" }}</td>
+          <td><span class="status {{ status_class(record) }}">{{ status_text(record) }}</span></td>
+          <td>{{ record.slurm_job_id or "-" }}</td>
+          <td>{{ record.kind }}</td>
+          <td><a class="btn" href="{{ url_for('job_detail', job_uuid=record.job_uuid) }}">Open</a></td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="9"><div class="empty-state">No jobs found</div></td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

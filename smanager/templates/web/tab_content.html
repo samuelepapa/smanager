@@ -1,0 +1,36 @@
+{% if active_tab == "stdout" %}
+<div class="card-inner">
+  <h3>Stdout</h3>
+  <pre class="log-view">{{ record.load_stdout() }}</pre>
+</div>
+{% elif active_tab == "stderr" %}
+<div class="card-inner">
+  <h3>Stderr</h3>
+  <pre class="log-view">{{ record.load_stderr() }}</pre>
+</div>
+{% elif active_tab == "sbatch" %}
+<div class="card-inner">
+  <h3>Sbatch</h3>
+  <pre class="log-view">{{ record.load_sbatch() }}</pre>
+</div>
+{% elif active_tab == "hyperparameters" %}
+<div class="card-inner">
+  <h3>Hyperparameters and Job Metadata</h3>
+  <div class="table-wrap">
+    <table class="detail-table">
+      <thead>
+        <tr><th>Key</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+      {% for key, value in record.as_hyperparameter_items() %}
+        <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card-inner">
+  <div class="empty-state">Unknown tab</div>
+</div>
+{% endif %}

@@ -165,6 +165,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
 
         # Generate a local ID for the entire sweep
         self.sweep_uuid = generate_timestamp_shortuuid()
+        self.created_at = datetime.now().isoformat(timespec="seconds")
 
         # Track generated jobs
         self.jobs: List[SlurmJob] = []
@@ -219,12 +220,15 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
 
         return self.jobs
 
-    def save_scripts(self, script_dir: Optional[Path] = None) -> List[Path]:
+    def save_scripts(
+        self, script_dir: Optional[Path] = None, dry_run: bool = False
+    ) -> List[Path]:
         """
         Save all job scripts to disk.
 
         Args:
             script_dir: Base directory for scripts.
+            dry_run: If True, persist the sweep as a dry-run.
 
         Returns:
             List of paths to saved script files.
@@ -261,15 +265,17 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
             script_path = self.sweep_dir / f"{job.job_uuid}.sbatch"
             script_path.write_text(script_content, encoding="utf-8")
             job.sbatch_script_path = script_path
+            job.created_at = self.created_at
+            job.dry_run = dry_run
 
             paths.append(script_path)
 
         # Save sweep mapping as JSON
-        self._save_sweep_mapping()
+        self._save_sweep_mapping(dry_run=dry_run)
 
         return paths
 
-    def _save_sweep_mapping(self) -> None:
+    def _save_sweep_mapping(self, dry_run: bool = False) -> None:
         """Save a JSON file mapping job UUIDs to their parameters."""
         if not self.sweep_dir:
             return
@@ -287,22 +293,54 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
             return str(obj)
 
         mapping = {
+            "kind": "sweep",
             "sweep_uuid": self.sweep_uuid,
             "script": str(self.script_path),
+            "script_path": str(self.script_path),
             "sweep_file": str(self.sweep_file),
             "sweep_function": self.sweep_function_name,
             "base_args": self.base_args,
             "arg_format": self.arg_format,
             "total_jobs": len(self.jobs),
-            "created_at": datetime.now().isoformat(),
+            "created_at": self.created_at,
+            "dry_run": dry_run,
             "jobs": {},
         }
 
         for job in self.jobs:
             mapping["jobs"][job.job_uuid] = {
+                "job_uuid": job.job_uuid,
                 "index": job.sweep_index,
                 "params": make_serializable(job.sweep_params),
                 "slurm_job_id": job.job_id,
+                "created_at": job.created_at,
+                "submitted_at": job.submitted_at,
+                "dry_run": job.dry_run,
+                "script_args": job.script_args,
+                "sbatch_path": (
+                    str(job.sbatch_script_path) if job.sbatch_script_path else None
+                ),
+                "output": job.output,
+                "error": job.error,
+                "slurm_options": {
+                    "partition": job.partition,
+                    "gpus": job.gpus,
+                    "memory": job.memory,
+                    "time": job.time,
+                    "nodes": job.nodes,
+                    "ntasks": job.ntasks,
+                    "cpus_per_task": job.cpus_per_task,
+                    "account": job.account,
+                    "qos": job.qos,
+                    "constraint": job.constraint,
+                    "exclude": job.exclude,
+                    "nodelist": job.nodelist,
+                    "mail_type": job.mail_type,
+                    "mail_user": job.mail_user,
+                    "executable": job.executable,
+                    "working_dir": str(job.working_dir),
+                    "extra_sbatch_args": job.extra_sbatch_args,
+                },
             }
 
         with open(mapping_path, "w", encoding="utf-8") as f:
@@ -322,7 +360,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
             List of job IDs (or None for dry run).
         """
         if not self.jobs or not self.jobs[0].sbatch_script_path:
-            self.save_scripts()
+            self.save_scripts(dry_run=dry_run)
 
         job_ids = []
         for job in self.jobs:
@@ -333,8 +371,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
                 time.sleep(delay)
 
         # Update mapping with job IDs after submission
-        if not dry_run:
-            self._save_sweep_mapping()
+        self._save_sweep_mapping(dry_run=dry_run)
 
         return job_ids
 

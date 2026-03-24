@@ -1,5 +1,6 @@
 """Tests for sweep handling."""
 
+import json
 import re
 import tempfile
 from pathlib import Path
@@ -162,6 +163,15 @@ def test_sweep_save_scripts():
         sweep_json = sweep_obj.sweep_dir / "sweep.json"
         assert sweep_json.exists()
 
+        mapping = json.loads(sweep_json.read_text(encoding="utf-8"))
+        assert mapping["kind"] == "sweep"
+        assert mapping["dry_run"] is False
+        assert mapping["total_jobs"] == 2
+        first_job = mapping["jobs"][next(iter(mapping["jobs"]))]
+        assert first_job["sbatch_path"].endswith(".sbatch")
+        assert "script_args" in first_job
+        assert "slurm_options" in first_job
+
         # Check logs directory was created
         logs_dir = sweep_obj.sweep_dir / "logs"
         assert logs_dir.exists()
@@ -171,3 +181,28 @@ def test_sweep_save_scripts():
         assert sweep_obj.sweep_dir.parent.parent.name == sweep_obj.experiment_name
         assert re.fullmatch(r"\d{14}\.[0-9a-f]{8}", sweep_obj.sweep_dir.name)
         assert re.fullmatch(r"\d{14}\.[0-9a-f]{8}", sweep_obj.sweep_uuid)
+
+
+def test_sweep_save_scripts_dry_run_flag():
+    """Test dry-run sweeps are persisted with dry-run metadata."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir).resolve()
+        script_path = tmpdir / "train.py"
+        script_path.write_text("print('train')")
+        sweep_file = create_sweep_file(tmpdir)
+
+        smanager_dir = tmpdir / ".smanager"
+        smanager_dir.mkdir()
+
+        sweep_obj = Sweep(
+            script_path=str(script_path),
+            sweep_file=str(sweep_file),
+            sweep_function="simple_sweep",
+        )
+
+        sweep_obj.save_scripts(dry_run=True)
+        mapping = json.loads(
+            (sweep_obj.sweep_dir / "sweep.json").read_text(encoding="utf-8")
+        )
+        assert mapping["dry_run"] is True
+        assert all(job["dry_run"] is True for job in mapping["jobs"].values())

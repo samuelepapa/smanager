@@ -1,0 +1,73 @@
+{% extends "web/base.html" %}
+{% block title %}SManager Job {{ record.job_uuid }}{% endblock %}
+{% block content %}
+{% if job_error %}
+<div class="alert error">
+  <strong>Kill job failed:</strong> {{ job_error }}
+</div>
+{% endif %}
+<div class="header">
+  <div>
+    <a href="{{ url_for('dashboard') }}">← Back to dashboard</a>
+    <h1 class="title title-spaced">Job Detail</h1>
+    <div class="subtitle">Inspect logs, parameters, and the generated Slurm script for one job.</div>
+  </div>
+  <div class="toolbar">
+    <span class="chip">{{ record.job_uuid }}</span>
+  </div>
+</div>
+
+<div class="detail-grid">
+  <div class="overview-stack">
+    <div class="card">
+      <h2>{{ record.experiment_name }}</h2>
+      <div class="muted">{{ record.script_path.name }} · {{ record.job_uuid }}</div>
+      <div class="status-row">
+        <span class="status {{ status_class(record) }}">{{ status_text(record) }}</span>
+      </div>
+      <div class="meta-grid meta-grid-spaced">
+        <div class="meta-item"><span class="meta-label">Job UUID</span>{{ record.job_uuid }}</div>
+        <div class="meta-item"><span class="meta-label">Run Started</span>{{ record.run_started_at }}</div>
+        <div class="meta-item"><span class="meta-label">Duration</span>{{ record.run_time }}</div>
+        <div class="meta-item"><span class="meta-label">Slurm ID</span>{{ record.slurm_job_id or "-" }}</div>
+        <div class="meta-item"><span class="meta-label">Partition</span>{{ record.partition or "-" }}</div>
+        <div class="meta-item"><span class="meta-label">GPUs</span>{{ format_gpus(record) }}</div>
+        <div class="meta-item"><span class="meta-label">Status</span>{{ status_text(record) }}</div>
+        <div class="meta-item"><span class="meta-label">Dry Run</span>{{ record.dry_run }}</div>
+        {% if record.sweep_uuid %}
+        <div class="meta-item"><span class="meta-label">Sweep UUID</span>{{ record.sweep_uuid }}</div>
+        {% endif %}
+        {% if record.sweep_function %}
+        <div class="meta-item"><span class="meta-label">Sweep Function</span>{{ record.sweep_function }}</div>
+        {% endif %}
+      </div>
+    </div>
+    <div id="status-panel" class="card status-card"
+         hx-get="{{ url_for('job_status_fragment', job_uuid=record.job_uuid) }}"
+         hx-trigger="load, every 10s"
+         hx-swap="outerHTML">
+      {% include "web/status_fragment.html" %}
+    </div>
+  </div>
+</div>
+
+<div class="card tab-card">
+  <div class="tab-bar">
+    <button type="button" class="tab-button{% if active_tab == 'stdout' %} active{% endif %}"
+            hx-get="{{ url_for('job_tab', job_uuid=record.job_uuid, tab='stdout') }}"
+            hx-target="#job-content" hx-swap="innerHTML">stdout</button>
+    <button type="button" class="tab-button{% if active_tab == 'stderr' %} active{% endif %}"
+            hx-get="{{ url_for('job_tab', job_uuid=record.job_uuid, tab='stderr') }}"
+            hx-target="#job-content" hx-swap="innerHTML">stderr</button>
+    <button type="button" class="tab-button{% if active_tab == 'hyperparameters' %} active{% endif %}"
+            hx-get="{{ url_for('job_tab', job_uuid=record.job_uuid, tab='hyperparameters') }}"
+            hx-target="#job-content" hx-swap="innerHTML">hyperparameters</button>
+    <button type="button" class="tab-button{% if active_tab == 'sbatch' %} active{% endif %}"
+            hx-get="{{ url_for('job_tab', job_uuid=record.job_uuid, tab='sbatch') }}"
+            hx-target="#job-content" hx-swap="innerHTML">.sbatch</button>
+  </div>
+  <div id="job-content">
+    {% include "web/tab_content.html" %}
+  </div>
+</div>
+{% endblock %}

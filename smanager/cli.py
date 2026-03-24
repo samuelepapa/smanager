@@ -20,6 +20,7 @@ from .config import SManagerConfig
 from .job import SlurmJob
 from .local import LocalSweep
 from .sweep import Sweep
+from .webapp import serve
 
 console = Console()
 
@@ -30,7 +31,7 @@ def parse_extra_args(args: Tuple[str, ...]) -> List[str]:
 
 
 @click.group()
-@click.version_option(version="0.2.3", prog_name="smanager")
+@click.version_option(version="0.3.0", prog_name="smanager")
 def cli():
     """
     Slurm Manager - A CLI tool for managing Slurm jobs and parameter sweeps.
@@ -139,7 +140,7 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
             working_dir=working_dir,
         )
 
-        script_path = job.save_script()
+        script_path = job.save_script(dry_run=dry_run)
 
         if show:
             script_content = script_path.read_text(encoding="utf-8")
@@ -337,7 +338,7 @@ def _display_sweep_info(
 
 def _save_and_submit_sweep(sweep_obj: Sweep, dry_run: bool, delay: float) -> None:
     """Save sweep scripts and optionally submit them."""
-    scripts = sweep_obj.save_scripts()
+    scripts = sweep_obj.save_scripts(dry_run=dry_run)
     console.print(f"\n[green]✓[/green] Generated {len(scripts)} job scripts")
     console.print(f"[dim]  Scripts saved in: {sweep_obj.sweep_dir}[/dim]")
     console.print(
@@ -1170,6 +1171,18 @@ def _display_sweep_history(sweeps: List[Dict]) -> None:
 
     console.print(table)
     console.print("\n[dim]Use 'smanager kill <UUID>' to cancel jobs from a sweep[/dim]")
+
+
+@cli.command()
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host")
+@click.option("--port", default=8000, type=int, show_default=True, help="Bind port")
+@click.option("--debug", is_flag=True, help="Run Flask in debug mode")
+def web(host: str, port: int, debug: bool):
+    """
+    Launch the local web dashboard for browsing jobs and sweeps.
+    """
+
+    serve(host=host, port=port, debug=debug)
 
 
 # Job status constants

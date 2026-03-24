@@ -1,5 +1,6 @@
 """Job creation and submission handling."""
 
+import json
 import subprocess
 import uuid
 from datetime import datetime
@@ -127,10 +128,61 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
 
         # Generate a local ID for this job
         self.job_uuid = generate_timestamp_shortuuid()
+        self.created_at = datetime.now().isoformat(timespec="seconds")
+        self.submitted_at: Optional[str] = None
+        self.dry_run = False
 
         # Generated script path (set after generate())
         self.sbatch_script_path: Optional[Path] = None
+        self.manifest_path: Optional[Path] = None
         self.job_id: Optional[str] = None
+
+    def _manifest_data(self) -> dict:
+        """Build the JSON manifest used by the web dashboard."""
+        return {
+            "kind": "job",
+            "job_uuid": self.job_uuid,
+            "created_at": self.created_at,
+            "submitted_at": self.submitted_at,
+            "dry_run": self.dry_run,
+            "experiment_name": self.experiment_name,
+            "script_path": str(self.script_path),
+            "script_args": self.script_args,
+            "sbatch_path": (
+                str(self.sbatch_script_path) if self.sbatch_script_path else None
+            ),
+            "output": self.output,
+            "error": self.error,
+            "slurm_job_id": self.job_id,
+            "slurm_options": {
+                "partition": self.partition,
+                "gpus": self.gpus,
+                "memory": self.memory,
+                "time": self.time,
+                "nodes": self.nodes,
+                "ntasks": self.ntasks,
+                "cpus_per_task": self.cpus_per_task,
+                "account": self.account,
+                "qos": self.qos,
+                "constraint": self.constraint,
+                "exclude": self.exclude,
+                "nodelist": self.nodelist,
+                "mail_type": self.mail_type,
+                "mail_user": self.mail_user,
+                "executable": self.executable,
+                "working_dir": str(self.working_dir),
+                "extra_sbatch_args": self.extra_sbatch_args,
+            },
+            "hyperparameters": {},
+        }
+
+    def _write_manifest(self) -> None:
+        if self.manifest_path is None:
+            return
+        self.manifest_path.write_text(
+            json.dumps(self._manifest_data(), indent=2),
+            encoding="utf-8",
+        )
 
     def generate_script(self, job_name: Optional[str] = None) -> str:
         """
@@ -173,16 +225,20 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
             extra_sbatch_args=self.extra_sbatch_args,
         )
 
-    def save_script(self, script_dir: Optional[Path] = None) -> Path:
+    def save_script(
+        self, script_dir: Optional[Path] = None, dry_run: bool = False
+    ) -> Path:
         """
         Save the sbatch script to disk.
 
         Args:
             script_dir: Directory to save the script.
+            dry_run: If True, persist the manifest as a dry-run job.
 
         Returns:
             Path to the saved script file.
         """
+        self.dry_run = dry_run
         if script_dir is None:
             script_dir = self.config.get_script_dir()
 
@@ -202,9 +258,12 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
 
         script_content = self.generate_script()
         script_path = experiment_dir / f"{self.job_uuid}.sbatch"
+        manifest_path = experiment_dir / f"{self.job_uuid}.json"
 
         script_path.write_text(script_content, encoding="utf-8")
         self.sbatch_script_path = script_path
+        self.manifest_path = manifest_path
+        self._write_manifest()
 
         return script_path
 
@@ -219,11 +278,13 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
             Job ID if submitted successfully, None otherwise.
         """
         if self.sbatch_script_path is None:
-            self.save_script()
+            self.save_script(dry_run=dry_run)
 
         cmd = ["sbatch", str(self.sbatch_script_path)]
 
         if dry_run:
+            self.dry_run = True
+            self._write_manifest()
             return None
 
         try:
@@ -232,6 +293,9 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
             output = result.stdout.strip()
             if "Submitted batch job" in output:
                 self.job_id = output.split()[-1]
+                self.submitted_at = datetime.now().isoformat(timespec="seconds")
+                self.dry_run = False
+                self._write_manifest()
                 return self.job_id
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(f"Failed to submit job: {exc.stderr}") from exc
