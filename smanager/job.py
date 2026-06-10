@@ -48,6 +48,7 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
         executable: str = "python",
         template: Optional[SbatchTemplate] = None,
         working_dir: Optional[str] = None,
+        preamble_file: Optional[str] = None,
     ):
         """
         Initialize a Slurm job.
@@ -77,6 +78,7 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
             executable: Python executable to use.
             template: Custom sbatch template.
             working_dir: Working directory for the job.
+            preamble_file: Optional path to a preamble file override.
         """
         self.script_path = Path(script_path).resolve()
         self.script_args = script_args or []
@@ -91,7 +93,10 @@ class SlurmJob:  # pylint: disable=too-many-instance-attributes
             self.experiment_name = f"{parent_name}.{script_name}"
 
         # Load or create config
-        self.config = config or SManagerConfig(self.script_path)
+        self.config = config or SManagerConfig(
+            self.script_path,
+            Path(preamble_file) if preamble_file else None,
+        )
 
         # Merge with config defaults (explicit args take precedence)
         defaults = self.config.defaults

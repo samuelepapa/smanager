@@ -18,6 +18,7 @@ from rich.table import Table
 
 from . import __version__
 from .config import SManagerConfig
+from .history import JobRecord, discover_jobs
 from .job import SlurmJob
 from .local import LocalSweep
 from .sweep import Sweep
@@ -70,6 +71,11 @@ def cli():
 @click.option("--mail-user", help="Email address for notifications")
 @click.option("--executable", default="python", help="Python executable")
 @click.option("--working-dir", "-w", type=click.Path(), help="Working directory")
+@click.option(
+    "--preamble-file",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Preamble file to use instead of .smanager/preamble.sh",
+)
 @click.option("--dry-run", "-d", is_flag=True, help="Generate script but do not submit")
 @click.option("--show", "-s", is_flag=True, help="Show generated script")
 @click.option(
@@ -97,6 +103,7 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
     mail_user: Optional[str],
     executable: str,
     working_dir: Optional[str],
+    preamble_file: Optional[str],
     dry_run: bool,
     show: bool,
     sbatch_arg: Tuple[str, ...],
@@ -139,6 +146,7 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
             extra_sbatch_args=list(sbatch_arg) if sbatch_arg else None,
             executable=executable,
             working_dir=working_dir,
+            preamble_file=preamble_file,
         )
 
         script_path = job.save_script(dry_run=dry_run)
@@ -204,6 +212,11 @@ def run(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too
 @click.option("--executable", default="python", help="Python executable")
 @click.option("--working-dir", "-w", type=click.Path(), help="Working directory")
 @click.option(
+    "--preamble-file",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Preamble file to use instead of .smanager/preamble.sh",
+)
+@click.option(
     "--dry-run", "-d", is_flag=True, help="Generate scripts but do not submit"
 )
 @click.option(
@@ -239,6 +252,7 @@ def sweep(  # pylint: disable=too-many-arguments,too-many-positional-arguments,t
     mail_user: Optional[str],
     executable: str,
     working_dir: Optional[str],
+    preamble_file: Optional[str],
     dry_run: bool,
     delay: float,
     arg_format: str,
@@ -287,6 +301,7 @@ def sweep(  # pylint: disable=too-many-arguments,too-many-positional-arguments,t
             extra_sbatch_args=list(sbatch_arg) if sbatch_arg else None,
             executable=executable,
             working_dir=working_dir,
+            preamble_file=preamble_file,
         )
 
         sweep_obj.generate_jobs()
@@ -387,6 +402,11 @@ def _save_and_submit_sweep(sweep_obj: Sweep, dry_run: bool, delay: float) -> Non
 @click.option("--executable", default="python", help="Python executable")
 @click.option("--working-dir", type=click.Path(), help="Working directory")
 @click.option(
+    "--preamble-file",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Preamble file to use instead of .smanager/preamble.sh",
+)
+@click.option(
     "--session-prefix",
     "-s",
     default="sweep",
@@ -411,6 +431,7 @@ def local_sweep(  # pylint: disable=too-many-arguments,too-many-positional-argum
     gpus: Optional[str],
     executable: str,
     working_dir: Optional[str],
+    preamble_file: Optional[str],
     session_prefix: str,
     dry_run: bool,
     show: bool,
@@ -456,6 +477,7 @@ def local_sweep(  # pylint: disable=too-many-arguments,too-many-positional-argum
             gpus=gpus,
             executable=executable,
             working_dir=working_dir,
+            preamble_file=preamble_file,
             session_prefix=session_prefix,
         )
 
@@ -954,26 +976,47 @@ def _find_sweep_by_uuid(
 
 
 @cli.command()
-@click.argument("sweep_uuid", required=False)
+@click.argument("target", required=False)
+@click.option(
+    "--all",
+    "kill_all",
+    is_flag=True,
+    help="Cancel all submitted jobs found in history",
+)
+@click.option(
+    "--last",
+    "kill_last",
+    is_flag=True,
+    help="Cancel the most recent job or sweep",
+)
+@click.option("--job-id", help="Cancel a specific Slurm job ID")
 @click.option(
     "--dry-run",
     "-d",
     is_flag=True,
     help="Show what would be cancelled without actually cancelling",
 )
-def kill(sweep_uuid: Optional[str], dry_run: bool):
+def kill(
+    target: Optional[str],
+    kill_all: bool,
+    kill_last: bool,
+    job_id: Optional[str],
+    dry_run: bool,
+):
     """
-    Cancel all jobs from a sweep.
+    Cancel submitted Slurm jobs recorded by smanager.
 
     \b
-    SWEEP_UUID: UUID of the sweep to cancel (optional).
-                If not provided, cancels jobs from the most recent sweep.
+    TARGET: Optional target. Use 'all', 'last', a sweep UUID, a job UUID,
+            or a Slurm job ID. If omitted, 'last' is used.
 
     \b
     Examples:
-        smanager kill                    # Kill jobs from last sweep
+        smanager kill                    # Kill the last job or sweep
+        smanager kill all                # Kill all submitted jobs
+        smanager kill --job-id 12345     # Kill one Slurm job ID
         smanager kill --dry-run          # Show what would be killed
-        smanager kill a1b2c3d4           # Kill specific sweep (partial UUID ok)
+        smanager kill a1b2c3d4           # Kill a sweep/job by partial UUID
     """
     try:
         config = SManagerConfig()
@@ -983,13 +1026,22 @@ def kill(sweep_uuid: Optional[str], dry_run: bool):
             console.print("[yellow]⚠[/yellow] No scripts directory found")
             return
 
-        result = _find_sweep_for_kill(script_dir, sweep_uuid)
-        if result is None:
+        records = discover_jobs(script_dir, include_dry_run=True)
+        records = [record for record in records if record.slurm_job_id]
+        selected_records = _select_records_for_kill(
+            records=records,
+            target=target,
+            kill_all=kill_all,
+            kill_last=kill_last,
+            job_id=job_id,
+        )
+        if selected_records is None:
             return
 
-        _, sweep_data = result
-        _display_kill_info(sweep_data, dry_run)
-        job_ids_to_cancel = _collect_jobs_to_cancel(sweep_data, dry_run)
+        _display_record_kill_info(selected_records, dry_run)
+        job_ids_to_cancel = [
+            record.slurm_job_id for record in selected_records if record.slurm_job_id
+        ]
 
         if not job_ids_to_cancel:
             console.print("\n[yellow]⚠[/yellow] No job IDs found to cancel")
@@ -1000,6 +1052,92 @@ def kill(sweep_uuid: Optional[str], dry_run: bool):
     except OSError as exc:
         console.print(f"[red]✗ Error:[/red] {exc}")
         sys.exit(1)
+
+
+def _record_sort_key(record: JobRecord) -> str:
+    """Sort key for finding the latest job-ish record."""
+    return record.submitted_at or record.created_at or ""
+
+
+def _select_records_for_kill(
+    *,
+    records: List[JobRecord],
+    target: Optional[str],
+    kill_all: bool,
+    kill_last: bool,
+    job_id: Optional[str],
+) -> Optional[List[JobRecord]]:
+    """Select job records for the kill command."""
+    if not records:
+        console.print("[yellow]⚠[/yellow] No submitted jobs found")
+        return None
+
+    requested = target.lower() if target else None
+    if kill_all or requested == "all":
+        return records
+
+    if job_id:
+        matched = [record for record in records if record.slurm_job_id == job_id]
+        if not matched:
+            console.print(f"[red]✗[/red] Slurm job ID '{job_id}' not found")
+            sys.exit(1)
+        return matched
+
+    if kill_last or requested in {None, "last"}:
+        latest = max(records, key=_record_sort_key)
+        if latest.sweep_uuid:
+            return [
+                record for record in records if record.sweep_uuid == latest.sweep_uuid
+            ]
+        return [latest]
+
+    matched = [
+        record
+        for record in records
+        if record.job_uuid.startswith(target)
+        or (record.sweep_uuid and record.sweep_uuid.startswith(target))
+        or record.slurm_job_id == target
+    ]
+    if not matched:
+        console.print(f"[red]✗[/red] No job or sweep matching '{target}' found")
+        sys.exit(1)
+    return matched
+
+
+def _display_record_kill_info(records: List[JobRecord], dry_run: bool) -> None:
+    """Display information about selected jobs to be killed."""
+    scope = "Sweep" if records and records[0].sweep_uuid else "Job"
+    if len(records) > 1 and not records[0].sweep_uuid:
+        scope = "Jobs"
+    title = (
+        f"[bold red]Kill {scope}[/bold red]"
+        if not dry_run
+        else f"[bold yellow]Kill {scope} (Dry Run)[/bold yellow]"
+    )
+    console.print(
+        Panel(
+            f"[bold]Selected Jobs:[/bold] {len(records)}\n"
+            f"[bold]Target:[/bold] {records[0].sweep_uuid or records[0].job_uuid}",
+            title=title,
+            border_style="red" if not dry_run else "yellow",
+        )
+    )
+
+    table = Table(title="Jobs to Cancel")
+    table.add_column("Job UUID", style="cyan")
+    table.add_column("Slurm Job ID", style="green")
+    table.add_column("Experiment", style="yellow")
+    table.add_column("Status", style="dim")
+
+    for record in records:
+        table.add_row(
+            record.job_uuid,
+            record.slurm_job_id or "-",
+            record.experiment_name,
+            "Will cancel" if not dry_run else "Would cancel",
+        )
+
+    console.print(table)
 
 
 def _find_sweep_for_kill(

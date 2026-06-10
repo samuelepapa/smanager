@@ -102,6 +102,20 @@ a:hover { text-decoration: underline; }
   background: linear-gradient(135deg, rgba(34,197,94,.22), rgba(56,189,248,.18));
 }
 
+.btn.danger {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fecaca;
+}
+
+.btn.danger:hover {
+  border-color: var(--fail);
+  background: rgba(127, 29, 29, 0.32);
+}
+
+.hidden {
+  display: none !important;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -161,6 +175,35 @@ th {
 
 tr:hover td { background: rgba(30, 41, 59, 0.45); }
 
+.job-selector {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-2);
+}
+
+.selector-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 84px;
+}
+
+.bulk-actions,
+.row-action {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.row-action {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+tr:hover .row-action,
+.row-action:focus-within {
+  opacity: 1;
+}
+
 .status {
   display: inline-flex;
   align-items: center;
@@ -179,11 +222,39 @@ tr:hover td { background: rgba(30, 41, 59, 0.45); }
 .status.unknown,
 .status.dry-run { background: rgba(245, 158, 11, 0.18); color: #fde68a; }
 
+.status-bar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(10px, 1fr);
+  gap: 2px;
+  width: min(220px, 100%);
+  height: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.status-segment {
+  min-width: 10px;
+}
+
+.status-segment.running { background: #60a5fa; }
+.status-segment.done { background: #22c55e; }
+.status-segment.failed { background: #ef4444; }
+.status-segment.unknown,
+.status-segment.dry-run { background: #f59e0b; }
+
 .detail-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
   align-items: flex-start;
+}
+
+.job-detail-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
 }
 
 .overview-stack {
@@ -206,8 +277,8 @@ tr:hover td { background: rgba(30, 41, 59, 0.45); }
 }
 
 .status-card {
-  flex: 1 1 320px;
-  min-width: 300px;
+  min-width: 0;
+  width: 100%;
 }
 
 .status-panel-inner h3 {
@@ -228,11 +299,41 @@ tr:hover td { background: rgba(30, 41, 59, 0.45); }
   margin-top: 16px;
 }
 
+.job-summary-grid {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.job-status-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .meta-item {
   padding: 10px 12px;
   border: 1px solid rgba(36, 48, 66, 0.85);
   border-radius: 14px;
   background: rgba(2, 6, 23, 0.35);
+}
+
+button.meta-item,
+.copy-meta {
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.copy-meta:hover,
+.copy-meta.copied,
+[data-copy].copied {
+  border-color: var(--accent-2);
+  background: rgba(14, 116, 144, 0.24);
 }
 
 .meta-label {
@@ -295,10 +396,48 @@ tr:hover td { background: rgba(30, 41, 59, 0.45); }
   margin-top: 18px;
 }
 
+.confirm-dialog {
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 0;
+  color: var(--text);
+  background: var(--panel);
+}
+
+.confirm-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.72);
+}
+
+.confirm-dialog form {
+  padding: 18px;
+}
+
+.confirm-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 @media (max-width: 980px) {
   .detail-grid { flex-direction: column; }
   .overview-stack,
   .status-card { flex-basis: auto; min-width: 0; }
   .meta-grid { grid-template-columns: 1fr; }
   .header { flex-direction: column; }
+}
+
+@media (max-width: 720px) {
+  .job-detail-grid { grid-template-columns: 1fr; }
 }

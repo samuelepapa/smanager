@@ -28,6 +28,7 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
         executable: str = "python",
         working_dir: Optional[str] = None,
         session_prefix: str = "sweep",
+        preamble_file: Optional[str] = None,
     ):
         """
         Initialize a local parameter sweep.
@@ -46,6 +47,7 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
             executable: Python executable to use.
             working_dir: Working directory for the script.
             session_prefix: Prefix for tmux session names.
+            preamble_file: Optional path to a preamble file override.
         """
         self.script_path = Path(script_path).resolve()
         self.sweep_file = Path(sweep_file).resolve()
@@ -76,7 +78,10 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
             script_name = self.script_path.stem
             self.experiment_name = f"{parent_name}.{script_name}"
 
-        self.config = config or SManagerConfig(self.script_path)
+        self.config = config or SManagerConfig(
+            self.script_path,
+            Path(preamble_file) if preamble_file else None,
+        )
 
         # Generate a local ID for this local sweep
         self.sweep_uuid = generate_timestamp_shortuuid()

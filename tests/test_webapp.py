@@ -269,6 +269,8 @@ def test_dashboard_renders_jobs_and_dry_run_toggle():
             assert ids["sweep_done_uuid"] in body
             assert ids["sweep_failed_uuid"] in body
             assert ids["dry_run_job_uuid"] not in body
+            assert f"/sweeps/{ids['sweep_uuid']}" in body
+            assert "status-bar" in body
             assert "running (R)" in body
             assert "done (CD)" in body
             assert "failed (F)" in body
@@ -278,6 +280,22 @@ def test_dashboard_renders_jobs_and_dry_run_toggle():
             body_all = dashboard_all.get_data(as_text=True)
             assert ids["dry_run_job_uuid"] in body_all
             assert "dry-run" in body_all
+
+
+def test_sweep_detail_renders_jobs_and_parameter_tabs():
+    """Sweep detail page shows all jobs plus parameter-specific tabs."""
+    with _demo_client() as (_root, ids, client, status_map):
+        with patch(
+            "smanager.webapp.refresh_status",
+            side_effect=_fake_refresh_status(status_map),
+        ):
+            response = client.get(f"/sweeps/{ids['sweep_uuid']}")
+            assert response.status_code == 200
+            body = response.get_data(as_text=True)
+            assert ids["sweep_done_uuid"] in body
+            assert ids["sweep_failed_uuid"] in body
+            assert 'data-param-tab="lr"' in body
+            assert 'data-param-tab="batch_size"' in body
 
 
 def test_job_detail_tabs_status_and_kill_flow():
@@ -297,7 +315,9 @@ def test_job_detail_tabs_status_and_kill_flow():
             assert ".sbatch" in detail_body
             assert "single stdout line" in detail_body
             assert '<button type="submit">Kill job</button>' not in detail_body
-            assert '<button class="btn" type="submit">Kill job</button>' in detail_body
+            assert 'data-confirm="Kill this job?"' in detail_body
+            assert 'data-confirm="Delete this job?"' in detail_body
+            assert "Copy .sbatch path" in detail_body
             assert '<button type="button" class="tab-button active"' in detail_body
 
             stderr_detail = client.get(f"/jobs/{ids['single_job_uuid']}?tab=stderr")
@@ -340,6 +360,37 @@ def test_job_detail_tabs_status_and_kill_flow():
             dry_detail = client.get(f"/jobs/{ids['dry_run_job_uuid']}")
             assert dry_detail.status_code == 200
             assert "Kill job</button>" not in dry_detail.get_data(as_text=True)
+
+
+def test_dashboard_selection_and_delete_actions():
+    """Dashboard exposes single-row and bulk delete/kill controls."""
+    with _demo_client() as (_root, ids, client, status_map):
+        with patch(
+            "smanager.webapp.refresh_status",
+            side_effect=_fake_refresh_status(status_map),
+        ):
+            dashboard = client.get("/")
+            assert dashboard.status_code == 200
+            body = dashboard.get_data(as_text=True)
+            assert 'class="job-selector"' in body
+            assert 'data-confirm="Kill selected jobs?"' in body
+            assert 'data-confirm="Delete selected jobs?"' in body
+            assert 'data-confirm="Delete this job?"' in body
+
+            with patch("smanager.webapp.cancel_job") as cancel_mock:
+                response = client.post(
+                    "/jobs/bulk",
+                    data={"action": "kill", "job_uuid": ids["single_job_uuid"]},
+                    follow_redirects=False,
+                )
+                assert response.status_code in {302, 303}
+                cancel_mock.assert_called_once_with("12345")
+
+            response = client.post(
+                f"/jobs/{ids['dry_run_job_uuid']}/delete",
+                follow_redirects=False,
+            )
+            assert response.status_code in {302, 303}
 
 
 def test_kill_job_command_error_is_rendered():

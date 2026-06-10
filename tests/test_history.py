@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from unittest.mock import patch
 
-from smanager.history import discover_jobs, refresh_status
+from smanager.history import delete_job, discover_jobs, refresh_status
 
 
 def _write_single_job_manifest(
@@ -189,3 +189,38 @@ def test_refresh_status_maps_running_and_done_jobs():
         assert record_by_id["12345"].status_state == "R"
         assert record_by_id["54321"].status_category == "done"
         assert record_by_id["54321"].status_state == "CD"
+
+
+def test_delete_job_removes_single_manifest_and_sweep_entry():
+    """Test deleting single jobs and one job from a sweep manifest."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir).resolve()
+        script_dir = root / ".smanager" / "scripts"
+
+        single_uuid = "20260324120000.aaaa1111"
+        sweep_uuid = "20260324120000.cddd3333"
+        _write_single_job_manifest(
+            script_dir / "demo" / "run1",
+            job_uuid=single_uuid,
+            slurm_job_id="12345",
+            dry_run=False,
+            created_at="2026-03-24T12:00:00",
+            submitted_at="2026-03-24T12:01:00",
+        )
+        _write_sweep_manifest(
+            script_dir / "demo" / "grid" / sweep_uuid,
+            job_uuid=sweep_uuid,
+            slurm_job_id="54321",
+            dry_run=False,
+            created_at="2026-03-24T12:03:00",
+            submitted_at="2026-03-24T12:04:00",
+        )
+
+        records = {record.job_uuid: record for record in discover_jobs(script_dir)}
+        delete_job(records[single_uuid], script_dir)
+        delete_job(records[sweep_uuid], script_dir)
+
+        remaining = discover_jobs(script_dir, include_dry_run=True)
+        assert remaining == []
+        assert not (script_dir / "demo" / "run1" / f"{single_uuid}.json").exists()
+        assert not (script_dir / "demo" / "grid" / sweep_uuid).exists()

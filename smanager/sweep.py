@@ -86,6 +86,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
         extra_sbatch_args: Optional[List[str]] = None,
         executable: str = "python",
         working_dir: Optional[str] = None,
+        preamble_file: Optional[str] = None,
     ):
         """
         Initialize a parameter sweep.
@@ -117,6 +118,7 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
             extra_sbatch_args: Extra sbatch arguments.
             executable: Python executable.
             working_dir: Working directory.
+            preamble_file: Optional path to a preamble file override.
         """
         self.script_path = Path(script_path).resolve()
         self.sweep_file = Path(sweep_file).resolve()
@@ -138,7 +140,10 @@ class Sweep:  # pylint: disable=too-many-instance-attributes
             script_name = self.script_path.stem
             self.experiment_name = f"{parent_name}.{script_name}"
 
-        self.config = config or SManagerConfig(self.script_path)
+        self.config = config or SManagerConfig(
+            self.script_path,
+            Path(preamble_file) if preamble_file else None,
+        )
 
         # Store Slurm options
         self.slurm_options = {

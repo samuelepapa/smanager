@@ -1,5 +1,9 @@
 # Slurm Manager (`smanager`)
 
+<p align="center">
+  <img src="smanager/static/favicon.svg" alt="SManager favicon" width="64" height="64">
+</p>
+
 [![CI](https://github.com/samuelepapa/smanager/actions/workflows/ci.yml/badge.svg)](https://github.com/samuelepapa/smanager/actions/workflows/ci.yml)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -15,7 +19,7 @@ A Python CLI tool for managing Slurm jobs and parameter sweeps with project-leve
 - **Script Organization**: Automatically organizes generated sbatch scripts by experiment name
 - **Preamble Support**: Add common setup commands (conda activation, environment variables, etc.) that apply to all jobs in a project
 - **Job Management**: Kill sweeps, view history, and manage running jobs
-- **Web Dashboard**: Browse job history, inspect logs, and cancel jobs from a local browser
+- **Web Dashboard**: Browse job history, inspect logs, and manage jobs from a local browser with a recognizable SManager favicon
 
 ## Installation
 
@@ -82,6 +86,9 @@ smanager run train.py --gpus 2 -- --lr 0.01 --epochs 100
 
 # Dry run (generate script without submitting)
 smanager run train.py --gpus 4 --dry-run --show
+
+# Use a custom preamble for this job
+smanager run train.py --preamble-file setup_gpu_env.sh
 ```
 
 ### 4. Run a Parameter Sweep
@@ -146,6 +153,11 @@ smanager web
 
 # Kill all jobs from the last sweep
 smanager kill
+
+# Kill all recorded jobs, the last job/sweep, or a specific Slurm job
+smanager kill all
+smanager kill last
+smanager kill --job-id 12345
 
 # Kill jobs from a specific sweep (partial UUID works)
 smanager kill a1b2c3d4
@@ -218,6 +230,7 @@ smanager run [OPTIONS] SCRIPT [SCRIPT_ARGS]...
 | `--mail-user` | | Email for notifications |
 | `--executable` | | Python executable (default: python) |
 | `--working-dir` | `-w` | Working directory (default: current directory) |
+| `--preamble-file` | | Preamble file to use instead of `.smanager/preamble.sh` |
 | `--dry-run` | `-d` | Generate script without submitting |
 | `--show` | `-s` | Display generated script |
 | `--sbatch-arg` | | Extra sbatch arguments (repeatable) |
@@ -242,20 +255,26 @@ smanager sweep [OPTIONS] SCRIPT SWEEP_FILE SWEEP_FUNCTION [BASE_ARGS]...
 | `--dry-run` / `-d` | Generate scripts without submitting |
 | `--delay` | Delay between submissions (seconds) |
 | `--arg-format` | Argument format (default: `--{key}={value}`) |
+| `--preamble-file` | Preamble file to use instead of `.smanager/preamble.sh` |
 
 ### `smanager kill`
 
-Cancel all jobs from a sweep.
+Cancel submitted Slurm jobs recorded by smanager.
 
 ```
-smanager kill [SWEEP_UUID] [OPTIONS]
+smanager kill [TARGET] [OPTIONS]
 ```
+
+`TARGET` can be `all`, `last`, a sweep UUID, a job UUID, or a Slurm job ID.
+If omitted, `last` is used.
 
 **Options:**
 | Option | Description |
 |--------|-------------|
 | `--dry-run` / `-d` | Show what would be cancelled |
-| `--last` / `-l` | Kill jobs from the last sweep (default) |
+| `--all` | Cancel all submitted jobs in history |
+| `--last` | Cancel the most recent job or sweep |
+| `--job-id` | Cancel a specific Slurm job ID |
 
 ### `smanager history`
 
@@ -333,6 +352,7 @@ smanager local [OPTIONS] SCRIPT SWEEP_FILE SWEEP_FUNCTION [BASE_ARGS]...
 | `--session-prefix` | `-s` | Prefix for tmux session names (default: sweep) |
 | `--executable` | | Python executable (default: python) |
 | `--working-dir` | | Working directory |
+| `--preamble-file` | | Preamble file to use instead of `.smanager/preamble.sh` |
 | `--dry-run` | `-d` | Generate scripts without launching tmux |
 | `--show` | | Display generated worker scripts |
 | `--arg-format` | | Argument format (default: `--{key}={value}`) |

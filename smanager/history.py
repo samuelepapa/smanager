@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -430,3 +431,67 @@ def cancel_job(job_id: str) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def _remove_file(path: Optional[Path]) -> None:
+    if path and path.exists() and path.is_file():
+        path.unlink()
+
+
+def _remove_empty_parents(path: Path, stop_at: Path) -> None:
+    current = path
+    stop_at = stop_at.resolve()
+    while current != stop_at and stop_at in current.resolve().parents:
+        try:
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
+
+
+def delete_job(record: JobRecord, script_dir: Path) -> None:
+    """Delete generated files and manifest data for a job record."""
+    if record.kind == "sweep" and record.source_path:
+        _delete_sweep_job(record, script_dir)
+        return
+
+    _remove_file(record.output_path)
+    _remove_file(record.error_path)
+    _remove_file(record.sbatch_path)
+    _remove_file(record.source_path)
+
+    if record.source_path:
+        logs_dir = record.source_path.parent / "logs"
+        if logs_dir.exists() and logs_dir.is_dir():
+            try:
+                logs_dir.rmdir()
+            except OSError:
+                pass
+        _remove_empty_parents(record.source_path.parent, script_dir)
+
+
+def _delete_sweep_job(record: JobRecord, script_dir: Path) -> None:
+    """Delete one job entry from a sweep manifest."""
+    manifest_path = record.source_path
+    if manifest_path is None or not manifest_path.exists():
+        return
+
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    jobs = data.get("jobs", {})
+    jobs.pop(record.job_uuid, None)
+    data["total_jobs"] = len(jobs)
+
+    _remove_file(record.output_path)
+    _remove_file(record.error_path)
+    _remove_file(record.sbatch_path)
+
+    if jobs:
+        manifest_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return
+
+    shutil.rmtree(manifest_path.parent, ignore_errors=True)
+    _remove_empty_parents(manifest_path.parent.parent, script_dir)

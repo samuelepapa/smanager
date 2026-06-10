@@ -7,7 +7,14 @@
     <div class="subtitle">Browse submitted jobs, inspect logs, review hyperparameters, and manage active Slurm jobs from a local browser.</div>
   </div>
   <div class="toolbar">
+    <span class="chip">Entries: {{ entries|length }}</span>
     <span class="chip">Jobs: {{ records|length }}</span>
+    <form id="bulk-form" class="bulk-actions hidden" method="post" action="{{ url_for('jobs_bulk_action', show_dry_run=1 if show_dry_run else 0) }}">
+      <button class="btn danger" type="submit" name="action" value="kill"
+              data-confirm="Kill selected jobs?">Kill selected</button>
+      <button class="btn danger" type="submit" name="action" value="delete"
+              data-confirm="Delete selected jobs?">Delete selected</button>
+    </form>
     <a class="btn primary" href="{{ url_for('dashboard', show_dry_run=0 if show_dry_run else 1) }}">
       {{ "Hide dry-run jobs" if show_dry_run else "Show dry-run jobs" }}
     </a>
@@ -18,6 +25,7 @@
   <table>
     <thead>
       <tr>
+        <th>Select</th>
         <th>Job</th>
         <th>Run Time</th>
         <th>Duration</th>
@@ -26,29 +34,56 @@
         <th>Status</th>
         <th>Slurm ID</th>
         <th>Type</th>
-        <th>Open</th>
+        <th>Actions</th>
       </tr>
     </thead>
     <tbody>
-      {% if records %}
-        {% for record in records %}
+      {% if entries %}
+        {% for entry in entries %}
+        {% set primary = entry.primary %}
         <tr>
           <td>
-            <a href="{{ url_for('job_detail', job_uuid=record.job_uuid) }}">{{ record.experiment_name }}</a>
-            <div class="muted">{{ record.job_uuid }}</div>
+            <div class="selector-stack">
+              {% for record in entry.records %}
+              <input class="job-selector" type="checkbox" name="job_uuid"
+                     value="{{ record.job_uuid }}" form="bulk-form"
+                     aria-label="Select {{ record.job_uuid }}">
+              {% endfor %}
+            </div>
           </td>
-          <td>{{ record.run_started_at }}</td>
-          <td>{{ record.run_time }}</td>
-          <td>{{ format_gpus(record) }}</td>
-          <td>{{ record.partition or "-" }}</td>
-          <td><span class="status {{ status_class(record) }}">{{ status_text(record) }}</span></td>
-          <td>{{ record.slurm_job_id or "-" }}</td>
-          <td>{{ record.kind }}</td>
-          <td><a class="btn" href="{{ url_for('job_detail', job_uuid=record.job_uuid) }}">Open</a></td>
+          <td>
+            {% if entry.kind == "sweep" %}
+            <a href="{{ url_for('sweep_detail', sweep_uuid=entry.id, show_dry_run=1 if show_dry_run else 0) }}">{{ entry.title }}</a>
+            <div class="muted">{{ entry.records|length }} jobs · {{ entry.id }}</div>
+            <div class="muted">{{ entry.records|map(attribute="job_uuid")|join(", ") }}</div>
+            {% else %}
+            <a href="{{ url_for('job_detail', job_uuid=primary.job_uuid) }}">{{ entry.title }}</a>
+            <div class="muted">{{ primary.job_uuid }}</div>
+            {% endif %}
+          </td>
+          <td>{{ primary.run_started_at }}</td>
+          <td>{{ primary.run_time }}</td>
+          <td>{{ format_gpus(primary) }}</td>
+          <td>{{ primary.partition or "-" }}</td>
+          <td>
+            <div class="status-bar" aria-label="Job statuses">
+              {% for segment in entry.segments %}
+              <span class="status-segment {{ segment.class }}" title="{{ segment.label }}"></span>
+              {% endfor %}
+            </div>
+            <span class="status {{ status_class(primary) }}">{{ status_text(primary) }}</span>
+          </td>
+          <td>{{ primary.slurm_job_id or "-" }}</td>
+          <td>{{ entry.kind }}</td>
+          <td>
+            <form class="row-action" method="post" action="{{ url_for('job_delete', job_uuid=primary.job_uuid) }}">
+              <button class="btn danger" type="submit" data-confirm="Delete this job?">Delete</button>
+            </form>
+          </td>
         </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="9"><div class="empty-state">No jobs found</div></td></tr>
+        <tr><td colspan="10"><div class="empty-state">No jobs found</div></td></tr>
       {% endif %}
     </tbody>
   </table>
