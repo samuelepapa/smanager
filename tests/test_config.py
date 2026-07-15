@@ -49,6 +49,25 @@ def test_config_with_smanager_dir():
         assert config.defaults.get("memory") == "32G"
 
 
+def test_config_with_preamble_override():
+    """Test that an explicit preamble file overrides project preamble."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir).resolve()
+        smanager_dir = tmpdir / ".smanager"
+        smanager_dir.mkdir()
+        (smanager_dir / "preamble.sh").write_text("source project\n")
+
+        custom_preamble = tmpdir / "custom.sh"
+        custom_preamble.write_text("source custom\n")
+        script_path = tmpdir / "script.py"
+        script_path.touch()
+
+        config = SManagerConfig(script_path, custom_preamble)
+
+        assert config.config_dir == smanager_dir
+        assert config.preamble == "source custom\n"
+
+
 def test_config_discovery_in_parent():
     """Test that config is discovered in parent directories."""
     with tempfile.TemporaryDirectory() as tmpdir:

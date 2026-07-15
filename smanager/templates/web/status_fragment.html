@@ -1,0 +1,20 @@
+<div class="status-panel-inner">
+  <h3>Status</h3>
+  <div class="status-row">
+    <span class="status {{ status_class(record) }}">{{ status_text(record) }}</span>
+    <span class="kill-slot">
+      {% if record.can_kill and record.slurm_job_id and record.status_category == "running" %}
+      <form class="kill-form" method="post" action="{{ url_for('job_kill', job_uuid=record.job_uuid) }}">
+        <button class="btn" type="submit">Kill job</button>
+      </form>
+      {% endif %}
+    </span>
+  </div>
+  <div class="meta-grid meta-grid-status">
+    <div class="meta-item"><span class="meta-label">Slurm State</span>{{ record.status_state or "-" }}</div>
+    <div class="meta-item"><span class="meta-label">Category</span>{{ record.status_category }}</div>
+    <div class="meta-item"><span class="meta-label">Node</span>{{ record.status_node or "-" }}</div>
+    <div class="meta-item"><span class="meta-label">Elapsed</span>{{ record.status_time or record.run_time }}</div>
+    <div class="meta-item"><span class="meta-label">Exit Code</span>{{ record.status_exit_code or "-" }}</div>
+  </div>
+</div>

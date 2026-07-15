@@ -1,0 +1,2 @@
+recursive-include smanager/templates *.html
+recursive-include smanager/static *

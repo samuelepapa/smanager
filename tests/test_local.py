@@ -221,6 +221,7 @@ def test_local_sweep_save_scripts():
         with open(sweep_json, encoding="utf-8") as f:
             data = json.load(f)
         assert data["type"] == "local"
+        assert data["experiment_name"] == local_obj.experiment_name
         assert data["workers"] == 2
         assert data["total_jobs"] == 4
 

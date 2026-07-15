@@ -1,0 +1,77 @@
+{% extends "web/base.html" %}
+{% block title %}SManager Sweep {{ sweep_uuid }}{% endblock %}
+{% block content %}
+<div class="header">
+  <div>
+    <a href="{{ url_for('dashboard', show_dry_run=1 if show_dry_run else 0) }}">← Back to dashboard</a>
+    <h1 class="title title-spaced">Sweep Detail</h1>
+    <div class="subtitle">{{ sweep_uuid }}</div>
+  </div>
+  <div class="toolbar">
+    <span class="chip">Jobs: {{ records|length }}</span>
+  </div>
+</div>
+
+<div class="panel table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Job</th>
+        <th>Index</th>
+        <th>Run Time</th>
+        <th>Duration</th>
+        <th>Status</th>
+        <th>Slurm ID</th>
+        <th>Node</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for record in records %}
+      <tr>
+        <td>
+          <a href="{{ url_for('job_detail', job_uuid=record.job_uuid) }}">{{ record.experiment_name }}</a>
+          <div class="muted">{{ record.job_uuid }}</div>
+        </td>
+        <td>{{ record.sweep_index if record.sweep_index is not none else "-" }}</td>
+        <td>{{ record.run_started_at }}</td>
+        <td>{{ record.run_time }}</td>
+        <td><span class="status {{ status_class(record) }}">{{ status_text(record) }}</span></td>
+        <td>{{ record.slurm_job_id or "-" }}</td>
+        <td>{{ record.status_node or "-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card tab-card">
+  <div class="tab-bar">
+    <button type="button" class="tab-button active" data-param-tab="all">all</button>
+    {% for key in param_keys %}
+    <button type="button" class="tab-button" data-param-tab="{{ key }}">{{ key }}</button>
+    {% endfor %}
+  </div>
+  <div class="table-wrap">
+    <table class="detail-table">
+      <thead>
+        <tr>
+          <th>Job</th>
+          {% for key in param_keys %}
+          <th class="param-column" data-param-key="{{ key }}">{{ key }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+        <tr>
+          <td><a href="{{ url_for('job_detail', job_uuid=record.job_uuid) }}">{{ record.job_uuid }}</a></td>
+          {% for key in param_keys %}
+          <td class="param-column" data-param-key="{{ key }}">{{ record.hyperparameters.get(key, "-") }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

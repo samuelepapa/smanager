@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "smanager"
-version = "0.2.3"
+version = "0.4.0"
 description = "A CLI tool for managing Slurm jobs and parameter sweeps"
 readme = "README.md"
 license = {text = "MIT"}
@@ -27,6 +27,8 @@ dependencies = [
     "click>=8.0.0",
     "pyyaml>=6.0",
     "jinja2>=3.0.0",
+    "Flask>=3.0.0",
+    "waitress>=2.1.2,<3",
     "rich>=13.0.0",
 ]
 
@@ -45,6 +47,12 @@ smanager = "smanager.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["smanager*"]
+
+[tool.setuptools.package-data]
+smanager = [
+    "templates/**/*.html",
+    "static/*",
+]
 
 # Black configuration
 [tool.black]

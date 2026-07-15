@@ -13,21 +13,31 @@ class SManagerConfig:
     PREAMBLE_FILE = "preamble.sh"
     CONFIG_FILE = "config.yaml"
 
-    def __init__(self, script_path: Optional[Path] = None):
+    def __init__(
+        self,
+        script_path: Optional[Path] = None,
+        preamble_path: Optional[Path] = None,
+    ):
         """
         Initialize configuration by searching for .smanager directory.
 
         Args:
             script_path: Path to the target Python script. If provided,
                         searches upward from this location for .smanager.
+            preamble_path: Optional path to a preamble file that overrides the
+                           project-level preamble.
         """
         self.script_path = Path(script_path).resolve() if script_path else None
+        self.preamble_path = Path(preamble_path).resolve() if preamble_path else None
         self.config_dir: Optional[Path] = None
         self.preamble: str = ""
         self.defaults: dict = {}
 
         if self.script_path:
             self._discover_config()
+
+        if self.preamble_path:
+            self._load_preamble_override()
 
     def _discover_config(self) -> None:
         """Search upward from script location to find .smanager directory."""
@@ -61,6 +71,18 @@ class SManagerConfig:
         if config_path.exists():
             with open(config_path, "r", encoding="utf-8") as f:
                 self.defaults = yaml.safe_load(f) or {}
+
+    def _load_preamble_override(self) -> None:
+        """Load a command-line preamble file override."""
+        if not self.preamble_path:
+            return
+        if not self.preamble_path.exists():
+            raise FileNotFoundError(f"Preamble file not found: {self.preamble_path}")
+        if not self.preamble_path.is_file():
+            raise FileNotFoundError(
+                f"Preamble path is not a file: {self.preamble_path}"
+            )
+        self.preamble = self.preamble_path.read_text(encoding="utf-8")
 
     def get_preamble(self) -> str:
         """Return the preamble script content."""

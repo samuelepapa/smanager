@@ -78,5 +78,6 @@ dmypy.json
 .pylint.d/
 
 # Project specific
-.smanager/scripts/
+.smanager
 *.sbatch
+web-demo/
