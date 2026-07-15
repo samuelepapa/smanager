@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from flask import Flask, abort, redirect, render_template, request, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 from rich.console import Console
 
 from .config import SManagerConfig, find_project_root
@@ -27,6 +28,20 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
 console = Console()
+
+DASHBOARD_COLUMN_LABELS = {
+    "job": "Job",
+    "run_time": "Run Time",
+    "duration": "Duration",
+    "gpus": "GPUs",
+    "partition": "Partition",
+    "status": "Status",
+    "slurm_id": "Slurm ID",
+    "type": "Type",
+}
+DASHBOARD_COLUMN_KEYS = tuple(DASHBOARD_COLUMN_LABELS)
+DASHBOARD_DEFAULT_COLUMNS = ("job", "run_time", "duration", "partition", "status")
+WEBAPP_SETTINGS_FILE = "webapp_settings.json"
 
 
 def _sort_key(record: JobRecord) -> str:
@@ -51,6 +66,46 @@ def _status_class(record: JobRecord) -> str:
 
 def _format_gpus(record: JobRecord) -> str:
     return "-" if record.gpus is None else str(record.gpus)
+
+
+def _normalize_dashboard_columns(columns: object) -> List[str]:
+    """Return valid dashboard columns in their canonical order."""
+    if not isinstance(columns, list):
+        return list(DASHBOARD_DEFAULT_COLUMNS)
+
+    selected = {
+        column
+        for column in columns
+        if isinstance(column, str) and column in DASHBOARD_COLUMN_LABELS
+    }
+    if not selected:
+        return list(DASHBOARD_DEFAULT_COLUMNS)
+    return [column for column in DASHBOARD_COLUMN_KEYS if column in selected]
+
+
+def _read_webapp_settings(settings_path: Path) -> dict:
+    """Read project web settings, tolerating missing or invalid files."""
+    try:
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return settings if isinstance(settings, dict) else {}
+
+
+def _load_dashboard_columns(settings_path: Path) -> List[str]:
+    """Load the configured dashboard columns or return the defaults."""
+    settings = _read_webapp_settings(settings_path)
+    return _normalize_dashboard_columns(settings.get("dashboard_columns"))
+
+
+def _save_dashboard_columns(settings_path: Path, columns: object) -> List[str]:
+    """Persist valid dashboard columns while retaining other web settings."""
+    selected_columns = _normalize_dashboard_columns(columns)
+    settings = _read_webapp_settings(settings_path)
+    settings["dashboard_columns"] = selected_columns
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return selected_columns
 
 
 def _status_segments(records: List[JobRecord]) -> List[dict]:
@@ -133,6 +188,8 @@ def create_app(project_root: Optional[Path] = None) -> Flask:
     app = _make_app()
     app.config["SMANAGER_ROOT"] = str(root)
     app.config["SMANAGER_SCRIPT_DIR"] = str(script_dir)
+    settings_path = root / SManagerConfig.CONFIG_DIR_NAME / WEBAPP_SETTINGS_FILE
+    app.config["SMANAGER_WEBAPP_SETTINGS"] = str(settings_path)
 
     @app.context_processor
     def _inject_helpers() -> dict:
@@ -142,11 +199,11 @@ def create_app(project_root: Optional[Path] = None) -> Flask:
             "status_text": _status_text,
         }
 
-    _register_routes(app, script_dir)
+    _register_routes(app, script_dir, settings_path)
     return app
 
 
-def _register_routes(app: Flask, script_dir: Path) -> None:
+def _register_routes(app: Flask, script_dir: Path, settings_path: Path) -> None:
     """Register dashboard routes on an app instance."""
 
     @app.route("/")
@@ -160,7 +217,24 @@ def _register_routes(app: Flask, script_dir: Path) -> None:
             records=records,
             entries=entries,
             show_dry_run=show_dry_run,
+            visible_columns=_load_dashboard_columns(settings_path),
+            column_options=[
+                {"key": key, "label": DASHBOARD_COLUMN_LABELS[key]}
+                for key in DASHBOARD_COLUMN_KEYS
+            ],
         )
+
+    @app.route("/settings/dashboard-columns", methods=["POST"])
+    def dashboard_columns():
+        payload = request.get_json(silent=True) or {}
+        columns = (
+            payload.get("dashboard_columns") if isinstance(payload, dict) else None
+        )
+        try:
+            selected_columns = _save_dashboard_columns(settings_path, columns)
+        except OSError as exc:
+            return jsonify({"error": f"Unable to save dashboard columns: {exc}"}), 500
+        return jsonify({"dashboard_columns": selected_columns})
 
     @app.route("/jobs/<job_uuid>")
     def job_detail(job_uuid: str):

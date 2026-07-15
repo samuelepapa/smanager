@@ -294,6 +294,7 @@ class LocalSweep:  # pylint: disable=too-many-instance-attributes
         mapping = {
             "sweep_uuid": self.sweep_uuid,
             "type": "local",
+            "experiment_name": self.experiment_name,
             "script": str(self.script_path),
             "sweep_file": str(self.sweep_file),
             "sweep_function": self.sweep_function_name,

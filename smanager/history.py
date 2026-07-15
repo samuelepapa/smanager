@@ -394,6 +394,84 @@ def _make_job_records_from_sweep(manifest_path: Path) -> List[JobRecord]:
     return records
 
 
+def _make_job_records_from_local_sweep(manifest_path: Path) -> List[JobRecord]:
+    """Build dashboard records from a locally-run sweep manifest.
+
+    LocalSweep predates the Slurm sweep manifest format.  It stores one entry
+    per parameter set and one worker script/log per worker, rather than one
+    sbatch/output pair per job.  Expose each parameter set as a read-only job
+    record so the existing sweep pages can render it.
+    """
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    if data.get("type") != "local":
+        return []
+
+    script_path = _normalize_path(data.get("script_path") or data.get("script"))
+    if script_path is None or not data.get("sweep_uuid"):
+        return []
+
+    sweep_uuid = data["sweep_uuid"]
+    base_experiment = data.get("experiment_name") or script_path.stem
+    jobs_data = data.get("jobs", {})
+    worker_assignments = data.get("worker_assignments", {})
+    workers_by_index: Dict[int, str] = {}
+
+    for worker_name, assignment in worker_assignments.items():
+        for job_index in assignment.get("job_indices", []):
+            try:
+                workers_by_index[int(job_index)] = worker_name
+            except (TypeError, ValueError):
+                continue
+
+    records: List[JobRecord] = []
+    for job_key, job_info in jobs_data.items():
+        try:
+            job_index = int(job_info.get("index", job_key))
+        except (TypeError, ValueError):
+            continue
+
+        worker_name = workers_by_index.get(job_index)
+        worker_script = (
+            manifest_path.parent / f"{worker_name}.sh" if worker_name else manifest_path
+        )
+        worker_log = (
+            manifest_path.parent / "logs" / f"{worker_name}.log"
+            if worker_name
+            else None
+        )
+
+        records.append(
+            JobRecord(
+                # Local jobs do not have Slurm UUIDs.  Use stable IDs derived
+                # from the sweep UUID so the existing detail routes work.
+                job_uuid=f"{sweep_uuid}.local-{job_index}",
+                kind="local",
+                experiment_name=base_experiment,
+                script_path=script_path,
+                sbatch_path=worker_script,
+                output_path=worker_log,
+                error_path=None,
+                script_args=[],
+                hyperparameters=dict(job_info.get("params", {})),
+                slurm_options={},
+                created_at=data.get("created_at"),
+                submitted_at=None,
+                slurm_job_id=None,
+                dry_run=False,
+                sweep_uuid=sweep_uuid,
+                sweep_function=data.get("sweep_function"),
+                sweep_index=job_index,
+                source_path=manifest_path,
+            )
+        )
+
+    return records
+
+
 def discover_jobs(script_dir: Path, include_dry_run: bool = False) -> List[JobRecord]:
     """Discover all jobs stored under the scripts directory."""
     if not script_dir.exists():
@@ -408,6 +486,7 @@ def discover_jobs(script_dir: Path, include_dry_run: bool = False) -> List[JobRe
 
     for manifest_path in script_dir.glob("**/sweep.json"):
         records.extend(_make_job_records_from_sweep(manifest_path))
+        records.extend(_make_job_records_from_local_sweep(manifest_path))
 
     if not include_dry_run:
         records = [record for record in records if not record.dry_run]
@@ -454,6 +533,9 @@ def delete_job(record: JobRecord, script_dir: Path) -> None:
     if record.kind == "sweep" and record.source_path:
         _delete_sweep_job(record, script_dir)
         return
+    if record.kind == "local" and record.source_path:
+        _delete_local_sweep_job(record, script_dir)
+        return
 
     _remove_file(record.output_path)
     _remove_file(record.error_path)
@@ -488,6 +570,37 @@ def _delete_sweep_job(record: JobRecord, script_dir: Path) -> None:
     _remove_file(record.output_path)
     _remove_file(record.error_path)
     _remove_file(record.sbatch_path)
+
+    if jobs:
+        manifest_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return
+
+    shutil.rmtree(manifest_path.parent, ignore_errors=True)
+    _remove_empty_parents(manifest_path.parent.parent, script_dir)
+
+
+def _delete_local_sweep_job(record: JobRecord, script_dir: Path) -> None:
+    """Delete one parameter set from a local sweep manifest."""
+    manifest_path = record.source_path
+    if manifest_path is None or not manifest_path.exists():
+        return
+
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    jobs = data.get("jobs", {})
+    job_key = str(record.sweep_index)
+    jobs.pop(job_key, None)
+    data["total_jobs"] = len(jobs)
+
+    for assignment in data.get("worker_assignments", {}).values():
+        assignment["job_indices"] = [
+            index
+            for index in assignment.get("job_indices", [])
+            if index != record.sweep_index
+        ]
 
     if jobs:
         manifest_path.write_text(json.dumps(data, indent=2), encoding="utf-8")

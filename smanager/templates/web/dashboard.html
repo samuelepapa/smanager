@@ -15,26 +15,52 @@
       <button class="btn danger" type="submit" name="action" value="delete"
               data-confirm="Delete selected jobs?">Delete selected</button>
     </form>
+    <div class="columns-control" data-columns-control
+         data-save-url="{{ url_for('dashboard_columns') }}">
+      <button id="columns-button" class="btn" type="button"
+              aria-controls="dashboard-column-menu" aria-expanded="false"
+              aria-haspopup="true">Columns</button>
+      <div id="dashboard-column-menu" class="columns-menu hidden"
+           role="group" aria-label="Visible dashboard columns">
+        {% for column in column_options %}
+        <label class="column-option">
+          <input class="column-toggle" type="checkbox"
+                 data-column="{{ column.key }}"
+                 {% if column.key in visible_columns %}checked{% endif %}>
+          <span>{{ column.label }}</span>
+        </label>
+        {% endfor %}
+        <div class="column-save-status" data-column-save-status role="status"
+             aria-live="polite"></div>
+      </div>
+    </div>
     <a class="btn primary" href="{{ url_for('dashboard', show_dry_run=0 if show_dry_run else 1) }}">
       {{ "Hide dry-run jobs" if show_dry_run else "Show dry-run jobs" }}
     </a>
   </div>
 </div>
 
-<div class="panel table-wrap">
-  <table>
+<div class="panel table-wrap dashboard-table-wrap">
+  <table class="dashboard-table">
     <thead>
       <tr>
         <th>Select</th>
-        <th>Job</th>
-        <th>Run Time</th>
-        <th>Duration</th>
-        <th>GPUs</th>
-        <th>Partition</th>
-        <th>Status</th>
-        <th>Slurm ID</th>
-        <th>Type</th>
-        <th>Actions</th>
+        <th class="dashboard-column column-job{% if 'job' not in visible_columns %} hidden{% endif %}"
+            data-column="job">Job</th>
+        <th class="dashboard-column column-run-time{% if 'run_time' not in visible_columns %} hidden{% endif %}"
+            data-column="run_time">Run Time</th>
+        <th class="dashboard-column column-duration{% if 'duration' not in visible_columns %} hidden{% endif %}"
+            data-column="duration">Duration</th>
+        <th class="dashboard-column column-gpus{% if 'gpus' not in visible_columns %} hidden{% endif %}"
+            data-column="gpus">GPUs</th>
+        <th class="dashboard-column column-partition{% if 'partition' not in visible_columns %} hidden{% endif %}"
+            data-column="partition">Partition</th>
+        <th class="dashboard-column column-status{% if 'status' not in visible_columns %} hidden{% endif %}"
+            data-column="status">Status</th>
+        <th class="dashboard-column column-slurm-id{% if 'slurm_id' not in visible_columns %} hidden{% endif %}"
+            data-column="slurm_id">Slurm ID</th>
+        <th class="dashboard-column column-type{% if 'type' not in visible_columns %} hidden{% endif %}"
+            data-column="type">Type</th>
       </tr>
     </thead>
     <tbody>
@@ -51,7 +77,8 @@
               {% endfor %}
             </div>
           </td>
-          <td>
+          <td class="dashboard-column column-job{% if 'job' not in visible_columns %} hidden{% endif %}"
+              data-column="job">
             {% if entry.kind == "sweep" %}
             <a href="{{ url_for('sweep_detail', sweep_uuid=entry.id, show_dry_run=1 if show_dry_run else 0) }}">{{ entry.title }}</a>
             <div class="muted">{{ entry.records|length }} jobs · {{ entry.id }}</div>
@@ -61,11 +88,16 @@
             <div class="muted">{{ primary.job_uuid }}</div>
             {% endif %}
           </td>
-          <td>{{ primary.run_started_at }}</td>
-          <td>{{ primary.run_time }}</td>
-          <td>{{ format_gpus(primary) }}</td>
-          <td>{{ primary.partition or "-" }}</td>
-          <td>
+          <td class="dashboard-column column-run-time{% if 'run_time' not in visible_columns %} hidden{% endif %}"
+              data-column="run_time">{{ primary.run_started_at }}</td>
+          <td class="dashboard-column column-duration{% if 'duration' not in visible_columns %} hidden{% endif %}"
+              data-column="duration">{{ primary.run_time }}</td>
+          <td class="dashboard-column column-gpus{% if 'gpus' not in visible_columns %} hidden{% endif %}"
+              data-column="gpus">{{ format_gpus(primary) }}</td>
+          <td class="dashboard-column column-partition{% if 'partition' not in visible_columns %} hidden{% endif %}"
+              data-column="partition">{{ primary.partition or "-" }}</td>
+          <td class="dashboard-column column-status{% if 'status' not in visible_columns %} hidden{% endif %}"
+              data-column="status">
             <div class="status-bar" aria-label="Job statuses">
               {% for segment in entry.segments %}
               <span class="status-segment {{ segment.class }}" title="{{ segment.label }}"></span>
@@ -73,17 +105,14 @@
             </div>
             <span class="status {{ status_class(primary) }}">{{ status_text(primary) }}</span>
           </td>
-          <td>{{ primary.slurm_job_id or "-" }}</td>
-          <td>{{ entry.kind }}</td>
-          <td>
-            <form class="row-action" method="post" action="{{ url_for('job_delete', job_uuid=primary.job_uuid) }}">
-              <button class="btn danger" type="submit" data-confirm="Delete this job?">Delete</button>
-            </form>
-          </td>
+          <td class="dashboard-column column-slurm-id{% if 'slurm_id' not in visible_columns %} hidden{% endif %}"
+              data-column="slurm_id">{{ primary.slurm_job_id or "-" }}</td>
+          <td class="dashboard-column column-type{% if 'type' not in visible_columns %} hidden{% endif %}"
+              data-column="type">{{ entry.kind }}</td>
         </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="10"><div class="empty-state">No jobs found</div></td></tr>
+        <tr><td colspan="9"><div class="empty-state">No jobs found</div></td></tr>
       {% endif %}
     </tbody>
   </table>

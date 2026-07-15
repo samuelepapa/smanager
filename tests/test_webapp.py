@@ -111,6 +111,46 @@ def _write_sweep_manifest(
     _write_text(sweep_dir / "sweep.json", json.dumps(sweep_manifest, indent=2))
 
 
+def _write_local_sweep_manifest(
+    sweep_dir: Path,
+    *,
+    sweep_uuid: str,
+    script_path: Path,
+    sweep_file: Path,
+) -> None:
+    """Write the worker-oriented manifest produced by LocalSweep."""
+    worker_path = sweep_dir / "worker_0.sh"
+    log_path = sweep_dir / "logs" / "worker_0.log"
+    _write_text(worker_path, "#!/bin/bash\necho local sweep\n")
+    _write_text(log_path, "local sweep output\n")
+    manifest = {
+        "sweep_uuid": sweep_uuid,
+        "type": "local",
+        "experiment_name": "demo.local",
+        "script": str(script_path),
+        "sweep_file": str(sweep_file),
+        "sweep_function": "local_grid",
+        "base_args": ["--epochs", "2"],
+        "arg_format": "--{key}={value}",
+        "workers": 1,
+        "gpus": "0",
+        "total_jobs": 2,
+        "created_at": "2026-03-24T12:06:00",
+        "jobs": {
+            "0": {"index": 0, "params": {"lr": 0.1}},
+            "1": {"index": 1, "params": {"lr": 0.01}},
+        },
+        "worker_assignments": {
+            "worker_0": {
+                "job_indices": [0, 1],
+                "gpu": "0",
+                "session_name": "sweep_0",
+            }
+        },
+    }
+    _write_text(sweep_dir / "sweep.json", json.dumps(manifest, indent=2))
+
+
 def _build_demo_project(root: Path) -> Dict[str, str]:
     script_dir = root / ".smanager" / "scripts"
     _write_text(
@@ -137,6 +177,7 @@ def _build_demo_project(root: Path) -> Dict[str, str]:
     sweep_uuid = "20260324120000.cddd3333"
     sweep_done_uuid = "20260324120000.dddd4444"
     sweep_failed_uuid = "20260324120000.eeee5555"
+    local_sweep_uuid = "20260324120000.ffff5555"
 
     _write_job_manifest(
         script_dir / "demo" / "single" / single_job_uuid,
@@ -199,6 +240,12 @@ def _build_demo_project(root: Path) -> Dict[str, str]:
             },
         },
     )
+    _write_local_sweep_manifest(
+        script_dir / "demo" / "local" / local_sweep_uuid,
+        sweep_uuid=local_sweep_uuid,
+        script_path=root / "train.py",
+        sweep_file=root / "sweeps.py",
+    )
 
     return {
         "single_job_uuid": single_job_uuid,
@@ -206,6 +253,8 @@ def _build_demo_project(root: Path) -> Dict[str, str]:
         "sweep_done_uuid": sweep_done_uuid,
         "sweep_failed_uuid": sweep_failed_uuid,
         "sweep_uuid": sweep_uuid,
+        "local_sweep_uuid": local_sweep_uuid,
+        "local_job_uuid": f"{local_sweep_uuid}.local-0",
     }
 
 
@@ -268,6 +317,8 @@ def test_dashboard_renders_jobs_and_dry_run_toggle():
             assert ids["single_job_uuid"] in body
             assert ids["sweep_done_uuid"] in body
             assert ids["sweep_failed_uuid"] in body
+            assert f"/sweeps/{ids['local_sweep_uuid']}" in body
+            assert "local sweep output" not in body
             assert ids["dry_run_job_uuid"] not in body
             assert f"/sweeps/{ids['sweep_uuid']}" in body
             assert "status-bar" in body
@@ -280,6 +331,140 @@ def test_dashboard_renders_jobs_and_dry_run_toggle():
             body_all = dashboard_all.get_data(as_text=True)
             assert ids["dry_run_job_uuid"] in body_all
             assert "dry-run" in body_all
+
+
+def test_dashboard_columns_default_menu_and_actions():
+    """Dashboard defaults to the compact column set and bulk actions only."""
+    with _demo_client() as (_root, ids, client, status_map):
+        with patch(
+            "smanager.webapp.refresh_status",
+            side_effect=_fake_refresh_status(status_map),
+        ):
+            response = client.get("/")
+
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert ids["single_job_uuid"] in body
+        assert 'id="columns-button"' in body
+        assert 'class="bulk-actions hidden"' in body
+        assert "Actions" not in body
+        assert 'data-confirm="Delete this job?"' not in body
+
+        assert 'class="dashboard-column column-job"' in body
+        assert 'data-column="job">Job</th>' in body
+        assert 'class="dashboard-column column-run-time"' in body
+        assert 'data-column="run_time">Run Time</th>' in body
+        assert 'class="dashboard-column column-duration"' in body
+        assert 'data-column="duration">Duration</th>' in body
+        assert 'class="dashboard-column column-partition"' in body
+        assert 'data-column="partition">Partition</th>' in body
+        assert 'class="dashboard-column column-status"' in body
+        assert 'data-column="status">Status</th>' in body
+        assert '<th class="dashboard-column column-gpus hidden"' in body
+        assert '<th class="dashboard-column column-slurm-id hidden"' in body
+        assert '<th class="dashboard-column column-type hidden"' in body
+
+        for column_key in (
+            "job",
+            "run_time",
+            "duration",
+            "gpus",
+            "partition",
+            "status",
+            "slurm_id",
+            "type",
+        ):
+            assert f'data-column="{column_key}"' in body
+
+
+def test_dashboard_columns_persist_in_project_settings():
+    """Column choices are normalized, saved, and used on later requests."""
+    with _demo_client() as (root, _ids, client, status_map):
+        with patch(
+            "smanager.webapp.refresh_status",
+            side_effect=_fake_refresh_status(status_map),
+        ):
+            response = client.post(
+                "/settings/dashboard-columns",
+                json={"dashboard_columns": ["type", "job", "unknown", "type"]},
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == {"dashboard_columns": ["job", "type"]}
+
+        settings_path = root / ".smanager" / "webapp_settings.json"
+        assert json.loads(settings_path.read_text(encoding="utf-8")) == {
+            "dashboard_columns": ["job", "type"]
+        }
+
+        with patch(
+            "smanager.webapp.refresh_status",
+            side_effect=_fake_refresh_status(status_map),
+        ):
+            dashboard = client.get("/")
+        body = dashboard.get_data(as_text=True)
+        assert 'class="dashboard-column column-job"' in body
+        assert 'data-column="job">Job</th>' in body
+        assert 'class="dashboard-column column-type"' in body
+        assert 'data-column="type">Type</th>' in body
+        assert '<th class="dashboard-column column-status hidden"' in body
+
+
+def test_dashboard_columns_settings_preserve_other_values_and_recover_invalid_data():
+    """Invalid settings use defaults and saving retains unrelated preferences."""
+    with _demo_client() as (root, _ids, client, status_map):
+        settings_path = root / ".smanager" / "webapp_settings.json"
+        for invalid_settings in (
+            '{"theme": "dark", "dashboard_columns": "not-a-list"}',
+            '{"theme": "dark", "dashboard_columns": ["unknown"]}',
+            '{"theme": "dark", "dashboard_columns": [[], "job"]}',
+            "not valid json",
+        ):
+            settings_path.write_text(invalid_settings, encoding="utf-8")
+            with patch(
+                "smanager.webapp.refresh_status",
+                side_effect=_fake_refresh_status(status_map),
+            ):
+                dashboard = client.get("/")
+            body = dashboard.get_data(as_text=True)
+            assert 'class="dashboard-column column-job"' in body
+            assert 'data-column="job">Job</th>' in body
+            assert 'class="dashboard-column column-gpus hidden"' in body
+
+        settings_path.write_text(
+            json.dumps({"theme": "dark", "dashboard_columns": ["unknown"]}),
+            encoding="utf-8",
+        )
+        response = client.post(
+            "/settings/dashboard-columns",
+            json={"dashboard_columns": []},
+        )
+        assert response.status_code == 200
+        assert response.get_json() == {
+            "dashboard_columns": ["job", "run_time", "duration", "partition", "status"]
+        }
+        assert json.loads(settings_path.read_text(encoding="utf-8"))["theme"] == "dark"
+
+
+def test_dashboard_empty_state_uses_fixed_column_count():
+    """The empty state spans the selector and all supported data columns."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir).resolve()
+        (root / ".smanager").mkdir()
+        (root / ".smanager" / "config.yaml").write_text("{}\n", encoding="utf-8")
+        app = create_app(project_root=root)
+        client = app.test_client()
+
+        with patch(
+            "smanager.webapp.refresh_status",
+            side_effect=lambda records: records,
+        ):
+            response = client.get("/")
+
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert 'colspan="9"' in body
+        assert 'class="empty-state">No jobs found' in body
 
 
 def test_sweep_detail_renders_jobs_and_parameter_tabs():
@@ -297,6 +482,16 @@ def test_sweep_detail_renders_jobs_and_parameter_tabs():
             assert 'data-param-tab="lr"' in body
             assert 'data-param-tab="batch_size"' in body
 
+            local_response = client.get(f"/sweeps/{ids['local_sweep_uuid']}")
+            assert local_response.status_code == 200
+            local_body = local_response.get_data(as_text=True)
+            assert ids["local_job_uuid"] in local_body
+            assert 'data-param-tab="lr"' in local_body
+
+            local_job = client.get(f"/jobs/{ids['local_job_uuid']}")
+            assert local_job.status_code == 200
+            assert "local sweep output" in local_job.get_data(as_text=True)
+
 
 def test_job_detail_tabs_status_and_kill_flow():
     """Exercise job detail tabs, status fragment, and kill flow."""
@@ -309,6 +504,13 @@ def test_job_detail_tabs_status_and_kill_flow():
             assert detail.status_code == 200
             detail_body = detail.get_data(as_text=True)
             assert "Job Detail" in detail_body
+            status_position = detail_body.index(
+                '<div id="status-panel" class="card status-card"'
+            )
+            overview_position = detail_body.index(
+                '<div class="card job-overview-card">'
+            )
+            assert status_position < overview_position
             assert "stdout" in detail_body
             assert "stderr" in detail_body
             assert "hyperparameters" in detail_body
@@ -375,7 +577,8 @@ def test_dashboard_selection_and_delete_actions():
             assert 'class="job-selector"' in body
             assert 'data-confirm="Kill selected jobs?"' in body
             assert 'data-confirm="Delete selected jobs?"' in body
-            assert 'data-confirm="Delete this job?"' in body
+            assert "Actions" not in body
+            assert 'data-confirm="Delete this job?"' not in body
 
             with patch("smanager.webapp.cancel_job") as cancel_mock:
                 response = client.post(
